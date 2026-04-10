@@ -8,7 +8,7 @@
 (async()=>{
   const _sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
   const{data}=await _sc.auth.getSession();
-  if(!data?.session&&!window.location.search.includes('login'))window.location.replace('landing.html');
+  if(!data?.session) window.location.replace('landing.html');
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
