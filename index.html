@@ -37,7 +37,7 @@ a{color:var(--ac);text-decoration:none}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
 
-#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,#34C759 0%,#007AFF 50%,#00C6FB 100%);display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity .5s,transform .5s}
+#loginScreen{position:fixed;inset:0;background:url('marble-logo.jpg') center/cover no-repeat,linear-gradient(135deg,#1a1a1a 0%,#2d2d2d 100%);display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity .5s,transform .5s}
 #loginScreen.hidden{opacity:0;pointer-events:none;transform:scale(1.05)}
 .login-card{background:var(--bg2);border-radius:24px;padding:48px 40px;width:380px;max-width:90vw;box-shadow:var(--sh2);text-align:center}
 .login-logo{width:64px;height:64px;background:var(--ac);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px;color:#fff}
@@ -221,9 +221,9 @@ tr:hover td{background:var(--bg)}
 
 <div id="loginScreen">
   <div class="login-card">
-    <div class="login-logo"><i class="fas fa-store"></i></div>
-    <h1>StoreVault</h1>
-    <p>Grocery Inventory & POS System</p>
+    <div class="login-logo" style="background:none;padding:0;width:auto;height:auto"><img src="marble-logo.png" alt="Marble" style="width:120px;height:auto"></div>
+    <h1>Marble POS</h1>
+    <p>Inventory & Point of Sale System</p>
     <div class="form-group">
       <label>Email</label>
       <input class="form-input" id="loginUser" type="email" placeholder="Enter email" autocomplete="email">
@@ -241,8 +241,8 @@ tr:hover td{background:var(--bg)}
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <aside class="sidebar" id="sidebar">
   <div class="sidebar-brand">
-  <div class="icon"><i class="fas fa-store"></i></div>
-  <div><h2>StoreVault</h2><span>Retail & Grocery POS</span></div>
+  <div class="icon" style="background:none;padding:0"><img src="marble-logo.png" alt="M" style="width:40px;height:40px;object-fit:contain;border-radius:8px"></div>
+  <div><h2>Marble POS</h2><span>Retail & Grocery POS</span></div>
 </div>
     <nav class="sidebar-nav" id="sidebarNav"></nav>
     <div class="sidebar-user" id="sidebarUser"></div>
@@ -604,7 +604,50 @@ function renderDashboard(){
   const totalProducts=DB.products.length;
   const lowStock=DB.products.filter(p=>getTotalStock(p.id)<=p.reorder).length;
   const totalVariants=DB.variants.length;
-  $('mainContent').innerHTML=`<div class="fade-in"><div class="stats-grid"><div class="stat-card"><div class="stat-icon blue"><i class="fas fa-coins"></i></div><div class="stat-value">${money(todayRevenue)}</div><div class="stat-label">Today's Revenue (${todaySales.length} sales)</div></div><div class="stat-card"><div class="stat-icon green"><i class="fas fa-boxes-stacked"></i></div><div class="stat-value">${totalProducts}</div><div class="stat-label">Products (${totalVariants} variants)</div></div><div class="stat-card"><div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div><div class="stat-value">${lowStock}</div><div class="stat-label">Low Stock Alerts</div></div><div class="stat-card"><div class="stat-icon red"><i class="fas fa-chart-line"></i></div><div class="stat-value">${DB.sales.length}</div><div class="stat-label">Total Sales All Time</div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px"><div class="card" style="grid-column:${lowStock?'1':'1/-1'}"><div class="card-header"><h3>Recent Sales</h3></div><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Customer</th><th>Amount</th><th>Cashier</th><th>Time</th></tr></thead><tbody>${DB.sales.slice(-8).reverse().map(s=>`<tr><td><span class="badge badge-blue">${s.receiptNo}</span></td><td>${s.customerName}</td><td style="font-weight:700">${money(s.totalAmount)}</td><td>${s.cashierName}</td><td>${new Date(s.date).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--tx3);padding:30px">No sales yet</td></tr>'}</tbody></table></div></div></div>${lowStock?`<div class="card"><div class="card-header"><h3><i class="fas fa-triangle-exclamation" style="color:var(--wn);margin-right:8px"></i>Low Stock</h3></div><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Product</th><th>Stock</th><th>Reorder</th></tr></thead><tbody>${DB.products.filter(p=>getTotalStock(p.id)<=p.reorder).map(p=>`<tr><td style="font-weight:600">${p.name}</td><td><span class="badge ${getTotalStock(p.id)===0?'badge-red':'badge-orange'}">${getTotalStock(p.id)} ${unitLabel(p)}</span></td><td>${p.reorder}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}</div></div>`;
+  $('mainContent').innerHTML=`<div class="fade-in"><div class="stats-grid"><div class="stat-card"><div class="stat-icon blue"><i class="fas fa-coins"></i></div><div class="stat-value">${money(todayRevenue)}</div><div class="stat-label">Today's Revenue (${todaySales.length} sales)</div></div><div class="stat-card"><div class="stat-icon green"><i class="fas fa-boxes-stacked"></i></div><div class="stat-value">${totalProducts}</div><div class="stat-label">Products (${totalVariants} variants)</div></div><div class="stat-card"><div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div><div class="stat-value">${lowStock}</div><div class="stat-label">Low Stock Alerts</div></div><div class="stat-card"><div class="stat-icon red"><i class="fas fa-chart-line"></i></div><div class="stat-value">${DB.sales.length}</div><div class="stat-label">Total Sales All Time</div></div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-bottom:20px"><div class="card"><div class="card-header"><h3>📅 Weekly Revenue</h3></div><div class="card-body"><div class="stat-value" id="weeklyRevenue">K0.00</div></div></div><div class="card"><div class="card-header"><h3>🔥 Top Products</h3></div><div class="card-body" id="topProducts"></div></div><div class="card"><div class="card-header"><h3>👨‍💼 Cashier Stats</h3></div><div class="card-body" id="cashierStats"></div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px"><div class="card" style="grid-column:${lowStock?'1':'1/-1'}"><div class="card-header"><h3>Recent Sales</h3></div><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Customer</th><th>Amount</th><th>Cashier</th><th>Time</th>${currentUser?.role==='admin'?'<th></th>':''}</tr></thead><tbody>${DB.sales.slice(-8).reverse().map(s=>`<tr><td><span class="badge badge-blue">${s.receiptNo}</span></td><td>${s.customerName}</td><td style="font-weight:700">${money(s.totalAmount)}</td><td>${s.cashierName}</td><td>${new Date(s.date).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})}</td>${currentUser?.role==='admin'?`<td><button class="btn btn-ghost btn-sm" style="color:var(--dn)" onclick="deleteSale('${s.id}')"><i class="fas fa-trash"></i></button></td>`:''}</tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--tx3);padding:30px">No sales yet</td></tr>'}</tbody></table></div></div></div>${lowStock?`<div class="card"><div class="card-header"><h3><i class="fas fa-triangle-exclamation" style="color:var(--wn);margin-right:8px"></i>Low Stock</h3></div><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Product</th><th>Stock</th><th>Reorder</th></tr></thead><tbody>${DB.products.filter(p=>getTotalStock(p.id)<=p.reorder).map(p=>`<tr><td style="font-weight:600">${p.name}</td><td><span class="badge ${getTotalStock(p.id)===0?'badge-red':'badge-orange'}">${getTotalStock(p.id)} ${unitLabel(p)}</span></td><td>${p.reorder}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}</div></div>`;
+  renderAnalytics();
+}
+
+function renderAnalytics(){
+  if(!DB.sales.length)return;
+  const weekAgo=new Date();weekAgo.setDate(weekAgo.getDate()-7);
+  let weeklyRevenue=0;
+  DB.sales.forEach(s=>{if(new Date(s.date)>=weekAgo)weeklyRevenue+=Number(s.totalAmount||0)});
+  const wrEl=$('weeklyRevenue');if(wrEl)wrEl.textContent='K'+weeklyRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const productMap={};
+  DB.saleItems.forEach(i=>{const n=i.productName;productMap[n]=(productMap[n]||0)+Number(i.qty||0)});
+  const topHTML=Object.entries(productMap).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,q])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>${n}</span><strong>${q}</strong></div>`).join('');
+  const tpEl=$('topProducts');if(tpEl)tpEl.innerHTML=topHTML||'<p style="color:var(--tx3);font-size:13px">No sales yet</p>';
+  const cashierMap={};
+  DB.sales.forEach(s=>{const n=s.cashierName;cashierMap[n]=(cashierMap[n]||0)+Number(s.totalAmount||0)});
+  const cashHTML=Object.entries(cashierMap).sort((a,b)=>b[1]-a[1]).map(([n,t])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>${n}</span><strong>${money(t)}</strong></div>`).join('');
+  const csEl=$('cashierStats');if(csEl)csEl.innerHTML=cashHTML||'<p style="color:var(--tx3);font-size:13px">No sales yet</p>';
+}
+
+async function deleteSale(saleId){
+  if(currentUser.role!=='admin'){toast('Only admin can delete sales','error');return}
+  showConfirm('Delete this sale? Stock will be restored.',async()=>{
+    try{
+      const{data:items}=await supabaseClient.from('sale_items').select('*').eq('sale_id',saleId);
+      if(items){
+        for(const item of items){
+          if(item.serial_id){
+            await supabaseClient.from('serialized_items').update({status:'in_stock'}).eq('id',item.serial_id);
+          }else{
+            const v=getVariant(item.variant_id);
+            if(v)await supabaseClient.from('variants').update({qty:(Number(v.qty)||0)+Number(item.qty||0)}).eq('id',item.variant_id);
+          }
+        }
+      }
+      const{error:itemsErr}=await supabaseClient.from('sale_items').delete().eq('sale_id',saleId);
+      if(itemsErr)throw itemsErr;
+      const{error:saleErr}=await supabaseClient.from('sales').delete().eq('id',saleId);
+      if(saleErr)throw saleErr;
+      DB=await loadDB();
+      toast('Sale deleted and stock restored','success');
+      renderDashboard();
+    }catch(err){console.error(err);toast('Error deleting sale','error')}
+  });
 }
 
 function renderProducts(){
