@@ -489,20 +489,6 @@ function seedData(){
   DB.stockMoves.push({id:uid(),type:'sale',variantId:'v3',qty:1,ref:saleId1,date:now(),userId:DB.users[1].id,notes:'Sale SV-0001'});
 }
 
-async function getBusinessId(){
-  const{data:u}=await supabaseClient.auth.getUser();
-  const{data:p}=await supabaseClient.from('profiles').select('business_id').eq('id',u.user.id).single();
-  return p?.business_id||null;
-}
-
-async function checkPlan(){
-  const{data:u}=await supabaseClient.auth.getUser();
-  const{data:p}=await supabaseClient.from('profiles').select('business_id').eq('id',u.user.id).single();
-  if(!p?.business_id)return'free';
-  const{data:biz}=await supabaseClient.from('businesses').select('plan').eq('id',p.business_id).single();
-  return biz?.plan||'free';
-}
-
 async function signInWithRealAuth(email,password){
   const{data,error}=await supabaseClient.auth.signInWithPassword({email,password});
   if(error){console.error(error);return{ok:false,error}}
@@ -511,7 +497,7 @@ async function signInWithRealAuth(email,password){
   const user=userData.user;
   const{data:profile,error:profileError}=await supabaseClient.from('profiles').select('*').eq('id',user.id).single();
   if(profileError||!profile){console.error(profileError);return{ok:false,error:profileError||new Error('Profile not found')}}
-  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,business_id:profile.business_id,active:true};
+  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,active:true};
   return{ok:true,user:currentUser};
 }
 
@@ -523,7 +509,7 @@ async function restoreSession(){
   const user=userData.user;
   const{data:profile,error:profileError}=await supabaseClient.from('profiles').select('*').eq('id',user.id).single();
   if(profileError||!profile)return false;
-  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,business_id:profile.business_id,active:true};
+  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,active:true};
   $('loginScreen').classList.add('hidden');
   $('appShell').classList.add('active');
   renderSidebar();
@@ -622,22 +608,12 @@ function renderDashboard(){
   renderAnalytics();
 }
 
-async function renderAnalytics(){
-  if(!DB.sales.length){
-    const tpEl=$('topProducts');if(tpEl)tpEl.innerHTML='<p style="color:var(--tx3);font-size:13px">No sales yet</p>';
-    const csEl=$('cashierStats');if(csEl)csEl.innerHTML='<p style="color:var(--tx3);font-size:13px">No sales yet</p>';
-    return;
-  }
-  const plan=await checkPlan();
+function renderAnalytics(){
+  if(!DB.sales.length)return;
   const weekAgo=new Date();weekAgo.setDate(weekAgo.getDate()-7);
   let weeklyRevenue=0;
   DB.sales.forEach(s=>{if(new Date(s.date)>=weekAgo)weeklyRevenue+=Number(s.totalAmount||0)});
   const wrEl=$('weeklyRevenue');if(wrEl)wrEl.textContent='K'+weeklyRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
-  if(plan==='free'){
-    const tpEl=$('topProducts');if(tpEl)tpEl.innerHTML='<p style="color:var(--tx3);font-size:13px">Upgrade to Pro to unlock analytics 🚀</p>';
-    const csEl=$('cashierStats');if(csEl)csEl.innerHTML='<p style="color:var(--tx3);font-size:13px">Upgrade to Pro to unlock analytics 🚀</p>';
-    return;
-  }
   const productMap={};
   DB.saleItems.forEach(i=>{const n=i.productName;productMap[n]=(productMap[n]||0)+Number(i.qty||0)});
   const topHTML=Object.entries(productMap).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,q])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>${n}</span><strong>${q}</strong></div>`).join('');
@@ -810,7 +786,6 @@ async function completeSale(subtotal){
   const receipt=nextReceipt();
   const sale={
     id:saleId,
-    business_id:currentUser.business_id||null,
     receipt_no:receipt,
     cashier_id:currentUser.id,
     cashier_name:currentUser.name,
