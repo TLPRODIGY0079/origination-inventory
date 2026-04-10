@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://vercel.com/insights/script.js"></script>
+<script>
+(async()=>{
+  const _sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
+  const{data}=await _sc.auth.getSession();
+  if(!data?.session&&!window.location.search.includes('login'))window.location.replace('landing.html');
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>StoreVault — Grocery Inventory & POS</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -270,9 +277,8 @@ tr:hover td{background:var(--bg)}
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
-/* =====================================================
-   STOREVault GROCERY INVENTORY MANAGEMENT SYSTEM
-   ===================================================== */
+
+  
 
 function applyTheme(theme){
   const root=document.documentElement;
@@ -307,6 +313,77 @@ const SUPABASE_URL = 'https://dzpdcfmlavcnhwmjjmbf.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk';
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let IS_ONLINE_MODE = true;
+
+// ── IndexedDB offline queue ──────────────────────────────────────────────────
+const IDB = (() => {
+  let _db;
+  function open() {
+    if (_db) return Promise.resolve(_db);
+    return new Promise((res, rej) => {
+      const req = indexedDB.open('marble_offline', 1);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id' });
+      };
+      req.onsuccess = e => { _db = e.target.result; res(_db); };
+      req.onerror = () => rej(req.error);
+    });
+  }
+  async function add(record) { const db = await open(); return new Promise((res,rej)=>{ const tx=db.transaction('queue','readwrite'); tx.objectStore('queue').put(record); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+  async function getAll() { const db = await open(); return new Promise((res,rej)=>{ const req=db.transaction('queue','readonly').objectStore('queue').getAll(); req.onsuccess=()=>res(req.result); req.onerror=()=>rej(req.error); }); }
+  async function remove(id) { const db = await open(); return new Promise((res,rej)=>{ const tx=db.transaction('queue','readwrite'); tx.objectStore('queue').delete(id); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+  return { add, getAll, remove };
+})();
+
+// ── Connectivity indicator ───────────────────────────────────────────────────
+function updateConnBadge() {
+  let badge = document.getElementById('connBadge');
+  if (!badge) return;
+  const online = navigator.onLine;
+  badge.innerHTML = online
+    ? '<i class="fas fa-wifi"></i> Online'
+    : '<i class="fas fa-wifi-slash"></i> Offline';
+  badge.style.background = online ? 'var(--gn2)' : 'var(--wn2)';
+  badge.style.color = online ? 'var(--gn)' : 'var(--wn)';
+}
+window.addEventListener('online',  () => { updateConnBadge(); syncOfflineQueue(); });
+window.addEventListener('offline', () => { updateConnBadge(); });
+
+// ── Sync offline queue to Supabase ──────────────────────────────────────────
+async function syncOfflineQueue() {
+  if (!navigator.onLine) return;
+  const queue = await IDB.getAll();
+  if (!queue.length) return;
+  let synced = 0;
+  for (const entry of queue) {
+    try {
+      // idempotency: skip if sale already exists
+      const { data: existing } = await supabaseClient.from('sales').select('id').eq('id', entry.sale.id).maybeSingle();
+      if (!existing) {
+        const { error: saleErr } = await supabaseClient.from('sales').insert([entry.sale]);
+        if (saleErr) throw saleErr;
+        for (const item of entry.items) {
+          await supabaseClient.from('sale_items').insert([item]);
+          if (item.serialized && item.serial_id) {
+            await supabaseClient.from('serialized_items').update({ status: 'sold' }).eq('id', item.serial_id);
+          } else {
+            const v = getVariant(item.variant_id);
+            if (v) await supabaseClient.from('variants').update({ qty: Math.max(0, (Number(v.qty)||0) - item.qty) }).eq('id', item.variant_id);
+          }
+          await supabaseClient.from('stock_moves').insert([{ id:uid(), type:'sale', variant_id:item.variant_id, qty:item.qty, ref:entry.sale.id, date:entry.sale.date, user_id:entry.sale.cashier_id, notes:'Sale '+entry.sale.receipt_no }]);
+        }
+      }
+      await IDB.remove(entry.id);
+      synced++;
+    } catch(e) { console.warn('Sync failed for', entry.id, e); }
+  }
+  if (synced) {
+    DB = await loadDB();
+    toast(`${synced} offline sale(s) synced ✓`, 'success');
+    if (currentPage === 'dashboard') renderDashboard();
+    if (currentPage === 'history')   renderHistory();
+  }
+}
 
 const $=id=>document.getElementById(id);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -497,7 +574,7 @@ async function signInWithRealAuth(email,password){
   const user=userData.user;
   const{data:profile,error:profileError}=await supabaseClient.from('profiles').select('*').eq('id',user.id).single();
   if(profileError||!profile){console.error(profileError);return{ok:false,error:profileError||new Error('Profile not found')}}
-  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,active:true};
+  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,plan:profile.plan||'free',onboarding_completed:profile.onboarding_completed??true,active:true};
   return{ok:true,user:currentUser};
 }
 
@@ -509,15 +586,29 @@ async function restoreSession(){
   const user=userData.user;
   const{data:profile,error:profileError}=await supabaseClient.from('profiles').select('*').eq('id',user.id).single();
   if(profileError||!profile)return false;
-  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,active:true};
+  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,plan:profile.plan||'free',onboarding_completed:profile.onboarding_completed??true,active:true};
   $('loginScreen').classList.add('hidden');
   $('appShell').classList.add('active');
   renderSidebar();
   navigate('dashboard');
   return true;
 }
+// Plan hierarchy: free < pro < enterprise
+const PLAN_LEVELS={free:0,pro:1,enterprise:2};
+const PAGE_MIN_PLAN={reports:'pro',users:'pro'}; // pages that require a paid plan
+
+function requiresPlan(page){
+  const min=PAGE_MIN_PLAN[page];
+  if(!min) return true; // no plan restriction
+  const userLevel=PLAN_LEVELS[currentUser.plan||'free']??0;
+  const reqLevel=PLAN_LEVELS[min]??0;
+  return userLevel>=reqLevel;
+}
+
 function hasAccess(page){
   if(!currentUser) return false;
+  if(!currentUser.onboarding_completed&&page!=='dashboard'){toast('Complete onboarding first','error');return false}
+  if(!requiresPlan(page)){showUpgradeModal(PAGE_MIN_PLAN[page]);return false}
   const r=currentUser.role;
   if(r==='admin') return true;
   const access={
@@ -526,6 +617,17 @@ function hasAccess(page){
     storekeeper:['dashboard','inventory','products']
   };
   return (access[r]||[]).includes(page);
+}
+
+function showUpgradeModal(requiredPlan){
+  openModal('Upgrade Required 🔒',
+    `<div style="text-align:center;padding:16px 0">
+      <div style="font-size:48px;margin-bottom:16px">🔒</div>
+      <p style="font-size:15px;font-weight:600;margin-bottom:8px">This feature requires the <span style="color:var(--ac);text-transform:capitalize">${requiredPlan}</span> plan</p>
+      <p style="font-size:13px;color:var(--tx2)">Your current plan: <strong style="text-transform:capitalize">${currentUser.plan||'free'}</strong></p>
+    </div>`,
+    `<button class="btn btn-outline btn-sm" onclick="closeModal()">Maybe Later</button><button class="btn btn-primary btn-sm" onclick="closeModal()"><i class="fas fa-arrow-up"></i> Upgrade Plan</button>`
+  );
 }
 
 function toast(msg,type='info'){
@@ -565,13 +667,16 @@ function renderSidebar(){
   $('sidebarNav').innerHTML=html;
   $('sidebarNav').querySelectorAll('.nav-item').forEach(el=>el.addEventListener('click',()=>{navigate(el.dataset.page);closeSidebar()}));
   const initials=currentUser.name.split(' ').map(w=>w[0]).join('').toUpperCase();
-  $('sidebarUser').innerHTML=`<div class="user-avatar">${initials}</div><div class="user-info"><div class="name">${currentUser.name}</div><div class="role">${currentUser.role}</div></div><button class="logout-btn" id="logoutBtn"><i class="fas fa-right-from-bracket"></i></button>`;
+  const planColors={free:'badge-gray',pro:'badge-blue',enterprise:'badge-orange'};
+  const planBadge=`<span class="badge ${planColors[currentUser.plan||'free']}" style="font-size:10px;padding:2px 7px">${(currentUser.plan||'free').toUpperCase()}</span>`;
+  $('sidebarUser').innerHTML=`<div class="user-avatar">${initials}</div><div class="user-info"><div class="name">${currentUser.name} ${planBadge}</div><div class="role">${currentUser.role}</div></div><button class="logout-btn" id="logoutBtn"><i class="fas fa-right-from-bracket"></i></button>`;
   $('logoutBtn').addEventListener('click',logout);
 }
 function closeSidebar(){$('sidebar').classList.remove('open');$('sidebarBackdrop').classList.remove('active')}
 function renderTopbarActions(extra=''){
-  $('topbarActions').innerHTML=`<button class="btn btn-outline btn-sm" id="themeToggleBtn"></button>${extra}`;
+  $('topbarActions').innerHTML=`<span id="connBadge" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600"></span><button class="btn btn-outline btn-sm" id="themeToggleBtn"></button>${extra}`;
   updateThemeButton();
+  updateConnBadge();
   $('themeToggleBtn').addEventListener('click',toggleTheme);
 }
 function navigate(page){
@@ -797,33 +902,56 @@ async function completeSale(subtotal){
     date:new Date().toISOString(),
     date_str:new Date().toISOString().slice(0,10)
   };
-  const{error:saleError}=await supabaseClient.from('sales').insert([sale]);
-  if(saleError){console.error(saleError);toast('Failed to save sale','error');return}
-  for(const ci of cart){
-    const saleItem={id:uid(),sale_id:saleId,variant_id:ci.variantId,product_name:ci.productName,variant_desc:ci.variantDesc,serialized:ci.serialized,serial_id:ci.serialId||null,serial_num:ci.serialNum||null,qty:ci.qty,price:ci.price,discount:0};
-    const{error:itemError}=await supabaseClient.from('sale_items').insert([saleItem]);
-    if(itemError){console.error(itemError);toast('Failed to save sale items','error');return}
-    if(ci.serialized&&ci.serialId){
-      const{error:serialError}=await supabaseClient.from('serialized_items').update({status:'sold'}).eq('id',ci.serialId);
-      if(serialError){console.error(serialError);toast('Failed to update serialized item','error');return}
-    }else{
-      const v=getVariant(ci.variantId);
-      const newQty=Math.max(0,(Number(v.qty)||0)-ci.qty);
-      const{error:qtyError}=await supabaseClient.from('variants').update({qty:newQty}).eq('id',ci.variantId);
-      if(qtyError){console.error(qtyError);toast('Failed to update variant stock','error');return}
-    }
-    await supabaseClient.from('stock_moves').insert([{id:uid(),type:'sale',variant_id:ci.variantId,qty:ci.qty,ref:saleId,date:new Date().toISOString(),user_id:currentUser.id,notes:'Sale '+receipt}]);
-  }
-  cart=[];
-  DB=await loadDB();
-  closeModal();
+  const saleItems=cart.map(ci=>({id:uid(),sale_id:saleId,variant_id:ci.variantId,product_name:ci.productName,variant_desc:ci.variantDesc,serialized:ci.serialized,serial_id:ci.serialId||null,serial_num:ci.serialNum||null,qty:ci.qty,price:ci.price,discount:0}));
+
+  // ── Optimistic local update so UI reflects sale immediately ─────────────
   const localSale={
     id:saleId,receiptNo:receipt,cashierId:currentUser.id,cashierName:currentUser.name,
     customerName:sale.customer_name,items:sale.items,totalAmount:total,discount,
     paymentMethod:sale.payment_method,date:sale.date,dateStr:sale.date_str
   };
+  DB.sales.push(localSale);
+  saleItems.forEach(si=>{
+    DB.saleItems.push({...si,saleId:si.sale_id,variantId:si.variant_id,productName:si.product_name,variantDesc:si.variant_desc,serialId:si.serial_id,serialNum:si.serial_num,price:Number(si.price)});
+    if(si.serialized&&si.serial_id){
+      const s=DB.serialized.find(x=>x.id===si.serial_id);if(s)s.status='sold';
+    }else{
+      const v=getVariant(si.variant_id);if(v)v.qty=Math.max(0,(Number(v.qty)||0)-si.qty);
+    }
+  });
+
+  cart=[];
+  closeModal();
   showReceipt(localSale);
   toast('Sale completed! '+receipt,'success');
+
+  if(!navigator.onLine){
+    // ── Save to offline queue ──────────────────────────────────────────────
+    await IDB.add({ id:saleId, sale, items:saleItems });
+    toast('Saved offline — will sync when connected','info');
+    return;
+  }
+
+  // ── Online: push to Supabase ─────────────────────────────────────────────
+  try{
+    const{error:saleError}=await supabaseClient.from('sales').insert([sale]);
+    if(saleError)throw saleError;
+    for(const si of saleItems){
+      await supabaseClient.from('sale_items').insert([si]);
+      if(si.serialized&&si.serial_id){
+        await supabaseClient.from('serialized_items').update({status:'sold'}).eq('id',si.serial_id);
+      }else{
+        const v=getVariant(si.variant_id);
+        if(v)await supabaseClient.from('variants').update({qty:Math.max(0,(Number(v.qty)||0)-si.qty)}).eq('id',si.variant_id);
+      }
+      await supabaseClient.from('stock_moves').insert([{id:uid(),type:'sale',variant_id:si.variant_id,qty:si.qty,ref:saleId,date:sale.date,user_id:currentUser.id,notes:'Sale '+receipt}]);
+    }
+    DB=await loadDB();
+  }catch(err){
+    console.error('Online save failed, queuing offline:',err);
+    await IDB.add({ id:saleId, sale, items:saleItems });
+    toast('Network error — sale queued for sync','info');
+  }
 }
 function showReceipt(sale){
   const items=DB.saleItems.filter(si=>si.saleId===sale.id);
@@ -903,6 +1031,7 @@ function renderHistTable(){
   async function startApp(){
     const loaded=await loadDB();
     DB=loaded||DB;
+    syncOfflineQueue();
     const restored=await restoreSession();
     if(restored)return;
     $('loginBtn').addEventListener('click',async()=>{
