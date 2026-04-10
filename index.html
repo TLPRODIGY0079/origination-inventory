@@ -224,8 +224,8 @@ tr:hover td{background:var(--bg)}
     <h1>StoreVault</h1>
     <p>Grocery Inventory & POS System</p>
     <div class="form-group">
-      <label>Username</label>
-      <input class="form-input" id="loginUser" type="text" placeholder="Enter username" autocomplete="username">
+      <label>Email</label>
+      <input class="form-input" id="loginUser" type="email" placeholder="Enter email" autocomplete="email">
     </div>
     <div class="form-group">
       <label>Password</label>
@@ -233,7 +233,6 @@ tr:hover td{background:var(--bg)}
     </div>
     <div class="login-error" id="loginError">Invalid credentials</div>
     <button class="btn btn-primary" id="loginBtn" style="margin-top:8px"><i class="fas fa-arrow-right"></i> Sign In</button>
-    <p style="margin-top:20px;font-size:11px;color:var(--tx3)">Demo: admin / admin123 · cashier / cash123</p>
   </div>
 </div>
 
@@ -489,10 +488,32 @@ function seedData(){
   DB.stockMoves.push({id:uid(),type:'sale',variantId:'v3',qty:1,ref:saleId1,date:now(),userId:DB.users[1].id,notes:'Sale SV-0001'});
 }
 
-function login(user,pass){
-  const u=DB.users.find(u=>u.username===user&&u.password===pass&&u.active);
-  if(u){currentUser=u;return true}
-  return false;
+async function signInWithRealAuth(email,password){
+  const{data,error}=await supabaseClient.auth.signInWithPassword({email,password});
+  if(error){console.error(error);return{ok:false,error}}
+  const{data:userData,error:userError}=await supabaseClient.auth.getUser();
+  if(userError||!userData?.user){console.error(userError);return{ok:false,error:userError}}
+  const user=userData.user;
+  const{data:profile,error:profileError}=await supabaseClient.from('profiles').select('*').eq('id',user.id).single();
+  if(profileError||!profile){console.error(profileError);return{ok:false,error:profileError||new Error('Profile not found')}}
+  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,active:true};
+  return{ok:true,user:currentUser};
+}
+
+async function restoreSession(){
+  const{data:sessionData}=await supabaseClient.auth.getSession();
+  if(!sessionData?.session)return false;
+  const{data:userData,error:userError}=await supabaseClient.auth.getUser();
+  if(userError||!userData?.user)return false;
+  const user=userData.user;
+  const{data:profile,error:profileError}=await supabaseClient.from('profiles').select('*').eq('id',user.id).single();
+  if(profileError||!profile)return false;
+  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,active:true};
+  $('loginScreen').classList.add('hidden');
+  $('appShell').classList.add('active');
+  renderSidebar();
+  navigate('dashboard');
+  return true;
 }
 function hasAccess(page){
   if(!currentUser) return false;
@@ -828,29 +849,33 @@ function renderHistTable(){
     openModal('Add User',`<div class="form-row"><div class="form-group"><label>Name</label><input class="form-input" id="mUserName"></div><div class="form-group"><label>Username</label><input class="form-input" id="mUserUsername"></div></div><div class="form-row"><div class="form-group"><label>Password</label><input class="form-input" id="mUserPassword" type="password"></div><div class="form-group"><label>Role</label><select class="form-input" id="mUserRole"><option value="admin">Admin</option><option value="manager">Manager</option><option value="cashier">Cashier</option><option value="storekeeper">Storekeeper</option></select></div></div>`,`<button class="btn btn-outline btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-primary btn-sm" id="saveUserBtn">Add User</button>`);
     setTimeout(()=>{$('saveUserBtn').addEventListener('click',()=>{const name=$('mUserName').value.trim();const username=$('mUserUsername').value.trim();const password=$('mUserPassword').value.trim();const role=$('mUserRole').value;if(!name||!username||!password){toast('All fields required','error');return}const user={id:uid(),name,username,password,role,active:true};DB.users.push(user);saveDB();closeModal();renderUsers();toast('User added','success')})},50);
   }
-  function logout(){
+  async function logout(){
+    await supabaseClient.auth.signOut();
     currentUser=null;
     cart=[];
     $('appShell').classList.remove('active');
     $('loginScreen').classList.remove('hidden');
   }
   async function startApp(){
-    let loaded=await loadDB();
-    if(!loaded){
-      toast('Could not load Supabase data','error');
-      loaded={
-        users:[
-          {id:'u-admin',username:'admin',password:'admin123',name:'Admin User',role:'admin',active:true},
-          {id:'u-cashier',username:'cashier',password:'cash123',name:'Sarah Johnson',role:'cashier',active:true},
-          {id:'u-manager',username:'manager',password:'mgr123',name:'David Kim',role:'manager',active:true},
-          {id:'u-store',username:'store',password:'store123',name:'Mike Chen',role:'storekeeper',active:true}
-        ],
-        categories:[],brands:[],products:[],variants:[],serialized:[],
-        sales:[],saleItems:[],suppliers:[],stockMoves:[],customers:[]
-      };
-    }
-    DB=loaded;
-    $('loginBtn').addEventListener('click',()=>{const user=$('loginUser').value.trim();const pass=$('loginPass').value.trim();if(login(user,pass)){$('loginScreen').classList.add('hidden');$('appShell').classList.add('active');renderSidebar();navigate('dashboard')}else{$('loginError').style.display='block';setTimeout(()=>{$('loginError').style.display='none'},2000)}});
+    const loaded=await loadDB();
+    DB=loaded||DB;
+    const restored=await restoreSession();
+    if(restored)return;
+    $('loginBtn').addEventListener('click',async()=>{
+      const email=$('loginUser').value.trim();
+      const password=$('loginPass').value.trim();
+      const result=await signInWithRealAuth(email,password);
+      if(result.ok){
+        $('loginScreen').classList.add('hidden');
+        $('appShell').classList.add('active');
+        renderSidebar();
+        navigate('dashboard');
+      }else{
+        $('loginError').textContent='Invalid email or password';
+        $('loginError').style.display='block';
+        setTimeout(()=>{$('loginError').style.display='none'},2500);
+      }
+    });
     $('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')$('loginBtn').click()});
     $('menuToggle').addEventListener('click',()=>{$('sidebar').classList.add('open');$('sidebarBackdrop').classList.add('active')});
     $('sidebarBackdrop').addEventListener('click',closeSidebar);
