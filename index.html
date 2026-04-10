@@ -8,6 +8,7 @@ const SUPABASE_URL = 'https://dzpdcfmlavcnhwmjjmbf.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk';
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let IS_ONLINE_MODE = true;
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>StoreVault — Grocery Inventory & POS</title>
@@ -320,36 +321,103 @@ let currentUser=null;
 let currentPage='dashboard';
 let cart=[];
 
-const IDB_NAME='StoreVaultDB';
-const IDB_VER=1;
+// IndexedDB removed — using Supabase
+const supabaseClient = supabase;
 
-function openIDB(){
-  return new Promise((res,rej)=>{
-    try{
-      const req=indexedDB.open(IDB_NAME,IDB_VER);
-      req.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains('data'))db.createObjectStore('data')};
-      req.onsuccess=e=>res(e.target.result);
-      req.onerror=()=>rej(req.error);
-    }catch(e){rej(e)}
-  });
+async function loadDB() {
+  if (!IS_ONLINE_MODE) return null;
+
+  const [
+    categoriesRes,
+    brandsRes,
+    productsRes,
+    variantsRes,
+    serializedRes,
+    salesRes,
+    saleItemsRes,
+    suppliersRes,
+    stockMovesRes,
+    customersRes
+  ] = await Promise.all([
+    supabaseClient.from('categories').select('*'),
+    supabaseClient.from('brands').select('*'),
+    supabaseClient.from('products').select('*'),
+    supabaseClient.from('variants').select('*'),
+    supabaseClient.from('serialized_items').select('*'),
+    supabaseClient.from('sales').select('*').order('date', { ascending: true }),
+    supabaseClient.from('sale_items').select('*'),
+    supabaseClient.from('suppliers').select('*'),
+    supabaseClient.from('stock_moves').select('*').order('date', { ascending: true }),
+    supabaseClient.from('customers').select('*')
+  ]);
+
+  const results = [
+    categoriesRes, brandsRes, productsRes, variantsRes, serializedRes,
+    salesRes, saleItemsRes, suppliersRes, stockMovesRes, customersRes
+  ];
+
+  const failed = results.find(r => r.error);
+  if (failed) {
+    console.error('Supabase load error:', failed.error);
+    return null;
+  }
+
+  return {
+    users: [
+      {id:'u-admin',username:'admin',password:'admin123',name:'Admin User',role:'admin',active:true},
+      {id:'u-cashier',username:'cashier',password:'cash123',name:'Sarah Johnson',role:'cashier',active:true},
+      {id:'u-manager',username:'manager',password:'mgr123',name:'David Kim',role:'manager',active:true},
+      {id:'u-store',username:'store',password:'store123',name:'Mike Chen',role:'storekeeper',active:true}
+    ],
+    categories: categoriesRes.data || [],
+    brands: brandsRes.data || [],
+    products: (productsRes.data || []).map(p => ({
+      ...p,
+      brandId: p.brand_id,
+      catId: p.cat_id,
+      desc: p.description
+    })),
+    variants: (variantsRes.data || []).map(v => ({
+      ...v,
+      productId: v.product_id
+    })),
+    serialized: (serializedRes.data || []).map(s => ({
+      ...s,
+      variantId: s.variant_id,
+      dateAdded: s.date_added
+    })),
+    sales: (salesRes.data || []).map(s => ({
+      ...s,
+      receiptNo: s.receipt_no,
+      cashierId: s.cashier_id,
+      cashierName: s.cashier_name,
+      customerName: s.customer_name,
+      totalAmount: Number(s.total_amount),
+      paymentMethod: s.payment_method,
+      dateStr: s.date_str
+    })),
+    saleItems: (saleItemsRes.data || []).map(i => ({
+      ...i,
+      saleId: i.sale_id,
+      variantId: i.variant_id,
+      productName: i.product_name,
+      variantDesc: i.variant_desc,
+      serialId: i.serial_id,
+      serialNum: i.serial_num,
+      price: Number(i.price)
+    })),
+    suppliers: suppliersRes.data || [],
+    stockMoves: (stockMovesRes.data || []).map(m => ({
+      ...m,
+      variantId: m.variant_id,
+      userId: m.user_id
+    })),
+    customers: customersRes.data || []
+  };
 }
-async function saveDB(){
-  try{
-    const db=await openIDB();
-    const tx=db.transaction('data','readwrite');
-    tx.objectStore('data').put(JSON.parse(JSON.stringify(DB)),'main');
-  }catch(e){}
-}
-async function loadDB(){
-  try{
-    const db=await openIDB();
-    return new Promise(res=>{
-      const tx=db.transaction('data','readonly');
-      const req=tx.objectStore('data').get('main');
-      req.onsuccess=()=>res(req.result||null);
-      req.onerror=()=>res(null);
-    });
-  }catch(e){return null}
+
+async function saveDB() {
+  return true;
 }
 
 function seedData(){
@@ -547,7 +615,7 @@ function renderProductTable(){
 function openProductModal(editId){
   const p=editId?getProduct(editId):null;
   openModal(p?'Edit Product':'Add Product',`<div class="form-row"><div class="form-group"><label>Product Name</label><input class="form-input" id="mProdName" value="${p?p.name:''}"></div><div class="form-group"><label>Brand</label><select class="form-input" id="mProdBrand">${DB.brands.map(b=>`<option value="${b.id}" ${p&&p.brandId===b.id?'selected':''}>${b.name}</option>`).join('')}</select></div></div><div class="form-row"><div class="form-group"><label>Category</label><select class="form-input" id="mProdCat">${DB.categories.map(c=>`<option value="${c.id}" ${p&&p.catId===c.id?'selected':''}>${c.name}</option>`).join('')}</select></div><div class="form-group"><label>Tracking Type</label><select class="form-input" id="mProdType"><option value="serialized" ${p&&p.type==='serialized'?'selected':''}>Serialized (IMEI/Serial)</option><option value="qty" ${p&&p.type==='qty'?'selected':''}>Quantity</option></select></div></div><div class="form-row"><div class="form-group"><label>Unit</label><select class="form-input" id="mProdUnit"><option value="pcs">pcs</option><option value="kg">kg</option><option value="bottle">bottle</option><option value="pack">pack</option><option value="loaf">loaf</option><option value="tin">tin</option></select></div><div class="form-group"><label>Reorder Level</label><input class="form-input" id="mProdReorder" type="number" value="${p?p.reorder:5}"></div></div><div class="form-row"><div class="form-group"><label>Cost Price (K)</label><input class="form-input" id="mProdCost" type="number" step="0.01" value="${p?p.cost:''}"></div><div class="form-group"><label>Selling Price (K)</label><input class="form-input" id="mProdPrice" type="number" step="0.01" value="${p?p.price:''}"></div></div><div class="form-group full"><label>Description</label><textarea class="form-input" id="mProdDesc" rows="2">${p?p.desc:''}</textarea></div>`,`<button class="btn btn-outline btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-primary btn-sm" id="saveProdBtn">${p?'Update':'Create'} Product</button>`);
-  setTimeout(()=>{if(p)$('mProdUnit').value=p.unit||'pcs';$('saveProdBtn').addEventListener('click',()=>{const name=$('mProdName').value.trim();if(!name){toast('Product name required','error');return}const data={name,brandId:$('mProdBrand').value,catId:$('mProdCat').value,type:$('mProdType').value,unit:$('mProdUnit').value,cost:parseFloat($('mProdCost').value)||0,price:parseFloat($('mProdPrice').value)||0,reorder:parseInt($('mProdReorder').value)||5,desc:$('mProdDesc').value.trim()};if(p)Object.assign(p,data);else{data.id=uid();DB.products.push(data)}saveDB();closeModal();renderProducts();toast(p?'Product updated':'Product created','success')})},50);
+  setTimeout(()=>{if(p)$('mProdUnit').value=p.unit||'pcs';$('saveProdBtn').addEventListener('click',async()=>{const name=$('mProdName').value.trim();if(!name){toast('Product name required','error');return}const data={name,brand_id:$('mProdBrand').value,cat_id:$('mProdCat').value,type:$('mProdType').value,unit:$('mProdUnit').value,cost:parseFloat($('mProdCost').value)||0,price:parseFloat($('mProdPrice').value)||0,reorder:parseInt($('mProdReorder').value)||5,desc:$('mProdDesc').value.trim()};if(p){const{error}=await supabaseClient.from('products').update(data).eq('id',p.id);if(error){console.error(error);toast('Failed to update product','error');return}}else{const{error}=await supabaseClient.from('products').insert([{id:uid(),...data}]);if(error){console.error(error);toast('Failed to create product','error');return}}DB=await loadDB();closeModal();renderProducts();toast(p?'Product updated':'Product created','success')})},50);
 }
 function openProductDetail(pId){
   const p=getProduct(pId);if(!p)return;const brand=getBrand(p.brandId);const cat=getCat(p.catId);const variants=getProductVariants(pId);const canEdit=currentUser.role==='admin'||currentUser.role==='manager';
@@ -558,7 +626,7 @@ function openProductDetail(pId){
 function openAddVariantModal(pId){
   const p=getProduct(pId);if(!p)return;
   openModal('Add Variant — '+p.name,`<div class="form-row"><div class="form-group"><label>Variant / Size / Color</label><input class="form-input" id="mVarAttr" placeholder="e.g. 2L or Red"></div><div class="form-group"><label>SKU</label><input class="form-input" id="mVarSku"></div></div><div class="form-row"><div class="form-group"><label>Selling Price (K)</label><input class="form-input" id="mVarPrice" type="number" step="0.01" value="${p.price}"></div><div class="form-group"><label>Cost Price (K)</label><input class="form-input" id="mVarCost" type="number" step="0.01" value="${p.cost}"></div></div><div class="form-row">${p.type==='qty'?`<div class="form-group"><label>Initial Qty</label><input class="form-input" id="mVarQty" type="number" value="0"></div>`:''}</div>`,`<button class="btn btn-outline btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-primary btn-sm" id="saveVarBtn">Add Variant</button>`);
-  setTimeout(()=>{$('saveVarBtn').addEventListener('click',()=>{const attrs={option:$('mVarAttr').value.trim()||'Standard'};const v={id:uid(),productId:pId,attrs,sku:$('mVarSku').value.trim()||uid().slice(0,8).toUpperCase(),cost:parseFloat($('mVarCost').value)||p.cost,price:parseFloat($('mVarPrice').value)||p.price,qty:p.type==='qty'?(parseFloat($('mVarQty')?.value)||0):0};DB.variants.push(v);saveDB();closeModal();toast('Variant added','success');if(currentPage==='products')renderProducts()})},50);
+  setTimeout(()=>{$('saveVarBtn').addEventListener('click',async()=>{const attrs={option:$('mVarAttr').value.trim()||'Standard'};const row={id:uid(),product_id:pId,attrs,sku:$('mVarSku').value.trim()||uid().slice(0,8).toUpperCase(),cost:parseFloat($('mVarCost').value)||p.cost,price:parseFloat($('mVarPrice').value)||p.price,qty:p.type==='qty'?(parseFloat($('mVarQty')?.value)||0):0};const{error}=await supabaseClient.from('variants').insert([row]);if(error){console.error(error);toast('Failed to add variant','error');return}DB=await loadDB();closeModal();toast('Variant added','success');if(currentPage==='products')renderProducts()})},50);
 }
 
 function renderInventory(){
@@ -590,7 +658,7 @@ function renderSerTable(){
 }
 function openStockInModal(){
   openModal('Stock In',`<div class="form-group"><label>Product</label><select class="form-input" id="siProduct"><option value="">Select product...</option>${DB.products.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div><div class="form-group"><label>Variant</label><select class="form-input" id="siVariant"><option value="">Select variant...</option></select></div><div id="siFields"></div>`,`<button class="btn btn-outline btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-success btn-sm" id="siSaveBtn"><i class="fas fa-check"></i> Add Stock</button>`);
-  setTimeout(()=>{$('siProduct').addEventListener('change',()=>{const pId=$('siProduct').value;const variants=getProductVariants(pId);$('siVariant').innerHTML=`<option value="">Select variant...</option>`+variants.map(v=>`<option value="${v.id}">${variantLabel(v)} (${v.sku})</option>`).join('');$('siFields').innerHTML=''});$('siVariant').addEventListener('change',()=>{const vId=$('siVariant').value;const v=getVariant(vId);if(!v)return;const p=getProduct(v.productId);if(!p)return;if(p.type==='serialized'){$('siFields').innerHTML=`<div class="form-group"><label>Serial Number</label><input class="form-input" id="siSerial" placeholder="Enter serial number"></div><div class="form-group"><label>IMEI (optional)</label><input class="form-input" id="siImei" placeholder="Enter IMEI"></div>`}else{$('siFields').innerHTML=`<div class="form-group"><label>Quantity (${unitLabel(p)})</label><input class="form-input" id="siQty" type="number" min="1" value="1"></div>`}});$('siSaveBtn').addEventListener('click',()=>{const vId=$('siVariant').value;if(!vId){toast('Select a variant','error');return}const v=getVariant(vId);const p=getProduct(v.productId);if(p.type==='serialized'){const serial=($('siSerial')?$('siSerial').value:'').trim();if(!serial){toast('Serial number required','error');return}DB.serialized.push({id:uid(),variantId:vId,serial,imei:($('siImei')?$('siImei').value:'').trim(),status:'in_stock',dateAdded:now()});DB.stockMoves.push({id:uid(),type:'stock_in',variantId:vId,qty:1,date:now(),userId:currentUser.id,notes:'Serial: '+serial})}else{const qty=parseFloat($('siQty')?$('siQty').value:0)||0;if(qty<=0){toast('Enter valid quantity','error');return}v.qty=(v.qty||0)+qty;DB.stockMoves.push({id:uid(),type:'stock_in',variantId:vId,qty,date:now(),userId:currentUser.id,notes:'Qty stock in: +'+qty})}saveDB();closeModal();toast('Stock added','success');if(currentPage==='inventory')renderInventory()})},50);
+  setTimeout(()=>{$('siProduct').addEventListener('change',()=>{const pId=$('siProduct').value;const variants=getProductVariants(pId);$('siVariant').innerHTML=`<option value="">Select variant...</option>`+variants.map(v=>`<option value="${v.id}">${variantLabel(v)} (${v.sku})</option>`).join('');$('siFields').innerHTML=''});$('siVariant').addEventListener('change',()=>{const vId=$('siVariant').value;const v=getVariant(vId);if(!v)return;const p=getProduct(v.productId);if(!p)return;if(p.type==='serialized'){$('siFields').innerHTML=`<div class="form-group"><label>Serial Number</label><input class="form-input" id="siSerial" placeholder="Enter serial number"></div><div class="form-group"><label>IMEI (optional)</label><input class="form-input" id="siImei" placeholder="Enter IMEI"></div>`}else{$('siFields').innerHTML=`<div class="form-group"><label>Quantity (${unitLabel(p)})</label><input class="form-input" id="siQty" type="number" min="1" value="1"></div>`}});$('siSaveBtn').addEventListener('click',async()=>{const vId=$('siVariant').value;if(!vId){toast('Select a variant','error');return}const v=getVariant(vId);const p=getProduct(v.productId);if(p.type==='serialized'){const serial=($('siSerial')?$('siSerial').value:'').trim();if(!serial){toast('Serial number required','error');return}const{error:serialError}=await supabaseClient.from('serialized_items').insert([{variant_id:vId,serial,imei:($('siImei')?$('siImei').value:'').trim(),status:'in_stock'}]);if(serialError){console.error(serialError);toast('Failed to add serialized stock','error');return}await supabaseClient.from('stock_moves').insert([{id:uid(),type:'stock_in',variant_id:vId,qty:1,date:new Date().toISOString(),user_id:currentUser.id,notes:'Serial: '+serial}])}else{const qty=parseFloat($('siQty')?$('siQty').value:0)||0;if(qty<=0){toast('Enter valid quantity','error');return}const{error:updateError}=await supabaseClient.from('variants').update({qty:(Number(v.qty)||0)+qty}).eq('id',vId);if(updateError){console.error(updateError);toast('Failed to update stock','error');return}await supabaseClient.from('stock_moves').insert([{id:uid(),type:'stock_in',variant_id:vId,qty,date:new Date().toISOString(),user_id:currentUser.id,notes:'Qty stock in: +'+qty}])}DB=await loadDB();closeModal();toast('Stock added','success');if(currentPage==='inventory')renderInventory()})},50);
 }
 
 function renderSales(){
@@ -649,17 +717,53 @@ function openCheckoutModal(){
   openModal('Checkout',`<div class="form-group"><label>Customer Name</label><input class="form-input" id="coCustomer" value="Walk-in Customer"></div><div class="form-row"><div class="form-group"><label>Discount (K)</label><input class="form-input" id="coDiscount" type="number" step="0.01" value="0"></div><div class="form-group"><label>Payment Method</label><select class="form-input" id="coPayment"><option value="cash">Cash</option><option value="card">Card</option><option value="transfer">Bank Transfer</option><option value="mobile">Mobile Payment</option></select></div></div><div style="background:var(--bg);padding:16px;border-radius:var(--rs);margin-top:8px"><div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px"><span>Subtotal</span><span>${money(subtotal)}</span></div><div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px"><span>Discount</span><span id="coDiscShow">-${money(0)}</span></div><div style="display:flex;justify-content:space-between;font-size:18px;font-weight:800;padding-top:8px;border-top:2px solid var(--bd)"><span>Total</span><span id="coTotalShow">${money(subtotal)}</span></div></div>`,`<button class="btn btn-outline btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-success btn-sm" id="coCompleteBtn"><i class="fas fa-check"></i> Complete Sale</button>`);
   setTimeout(()=>{const discEl=$('coDiscount');if(discEl)discEl.addEventListener('input',()=>{let d=parseFloat(discEl.value)||0;if(d<0)d=0;if(d>subtotal)d=subtotal;$('coDiscShow').textContent='-'+money(d);$('coTotalShow').textContent=money(subtotal-d)});$('coCompleteBtn').addEventListener('click',()=>completeSale(subtotal))},50);
 }
-function completeSale(subtotal){
+async function completeSale(subtotal){
   let discount=parseFloat($('coDiscount')?$('coDiscount').value:0)||0;
   if(discount<0)discount=0;
   if(discount>subtotal)discount=subtotal;
   const total=subtotal-discount;
   const saleId=uid();
   const receipt=nextReceipt();
-  const sale={id:saleId,receiptNo:receipt,cashierId:currentUser.id,cashierName:currentUser.name,customerName:($('coCustomer')?$('coCustomer').value:'Walk-in Customer').trim()||'Walk-in Customer',items:cart.reduce((s,i)=>s+i.qty,0),totalAmount:total,discount,paymentMethod:$('coPayment')?$('coPayment').value:'cash',date:now(),dateStr:today()};
-  DB.sales.push(sale);
-  cart.forEach(ci=>{DB.saleItems.push({id:uid(),saleId,variantId:ci.variantId,productName:ci.productName,variantDesc:ci.variantDesc,serialized:ci.serialized,serialId:ci.serialId||null,serialNum:ci.serialNum||null,qty:ci.qty,price:ci.price,discount:0});if(ci.serialized&&ci.serialId){const s=DB.serialized.find(x=>x.id===ci.serialId);if(s)s.status='sold'}else{const v=getVariant(ci.variantId);if(v)v.qty=Math.max(0,v.qty-ci.qty)}DB.stockMoves.push({id:uid(),type:'sale',variantId:ci.variantId,qty:ci.qty,ref:saleId,date:now(),userId:currentUser.id,notes:'Sale '+receipt})});
-  cart=[];saveDB();closeModal();showReceipt(sale);toast('Sale completed! '+receipt,'success');
+  const sale={
+    id:saleId,
+    receipt_no:receipt,
+    cashier_id:currentUser.id,
+    cashier_name:currentUser.name,
+    customer_name:($('coCustomer')?$('coCustomer').value:'Walk-in Customer').trim()||'Walk-in Customer',
+    items:cart.reduce((s,i)=>s+i.qty,0),
+    total_amount:total,
+    discount,
+    payment_method:$('coPayment')?$('coPayment').value:'cash',
+    date:new Date().toISOString(),
+    date_str:new Date().toISOString().slice(0,10)
+  };
+  const{error:saleError}=await supabaseClient.from('sales').insert([sale]);
+  if(saleError){console.error(saleError);toast('Failed to save sale','error');return}
+  for(const ci of cart){
+    const saleItem={id:uid(),sale_id:saleId,variant_id:ci.variantId,product_name:ci.productName,variant_desc:ci.variantDesc,serialized:ci.serialized,serial_id:ci.serialId||null,serial_num:ci.serialNum||null,qty:ci.qty,price:ci.price,discount:0};
+    const{error:itemError}=await supabaseClient.from('sale_items').insert([saleItem]);
+    if(itemError){console.error(itemError);toast('Failed to save sale items','error');return}
+    if(ci.serialized&&ci.serialId){
+      const{error:serialError}=await supabaseClient.from('serialized_items').update({status:'sold'}).eq('id',ci.serialId);
+      if(serialError){console.error(serialError);toast('Failed to update serialized item','error');return}
+    }else{
+      const v=getVariant(ci.variantId);
+      const newQty=Math.max(0,(Number(v.qty)||0)-ci.qty);
+      const{error:qtyError}=await supabaseClient.from('variants').update({qty:newQty}).eq('id',ci.variantId);
+      if(qtyError){console.error(qtyError);toast('Failed to update variant stock','error');return}
+    }
+    await supabaseClient.from('stock_moves').insert([{id:uid(),type:'sale',variant_id:ci.variantId,qty:ci.qty,ref:saleId,date:new Date().toISOString(),user_id:currentUser.id,notes:'Sale '+receipt}]);
+  }
+  cart=[];
+  DB=await loadDB();
+  closeModal();
+  const localSale={
+    id:saleId,receiptNo:receipt,cashierId:currentUser.id,cashierName:currentUser.name,
+    customerName:sale.customer_name,items:sale.items,totalAmount:total,discount,
+    paymentMethod:sale.payment_method,date:sale.date,dateStr:sale.date_str
+  };
+  showReceipt(localSale);
+  toast('Sale completed! '+receipt,'success');
 }
 function showReceipt(sale){
   const items=DB.saleItems.filter(si=>si.saleId===sale.id);
@@ -737,7 +841,20 @@ function renderHistTable(){
   }
   async function startApp(){
     let loaded=await loadDB();
-    if(!loaded){seedData();saveDB()}else{DB=loaded}
+    if(!loaded){
+      toast('Could not load Supabase data','error');
+      loaded={
+        users:[
+          {id:'u-admin',username:'admin',password:'admin123',name:'Admin User',role:'admin',active:true},
+          {id:'u-cashier',username:'cashier',password:'cash123',name:'Sarah Johnson',role:'cashier',active:true},
+          {id:'u-manager',username:'manager',password:'mgr123',name:'David Kim',role:'manager',active:true},
+          {id:'u-store',username:'store',password:'store123',name:'Mike Chen',role:'storekeeper',active:true}
+        ],
+        categories:[],brands:[],products:[],variants:[],serialized:[],
+        sales:[],saleItems:[],suppliers:[],stockMoves:[],customers:[]
+      };
+    }
+    DB=loaded;
     $('loginBtn').addEventListener('click',()=>{const user=$('loginUser').value.trim();const pass=$('loginPass').value.trim();if(login(user,pass)){$('loginScreen').classList.add('hidden');$('appShell').classList.add('active');renderSidebar();navigate('dashboard')}else{$('loginError').style.display='block';setTimeout(()=>{$('loginError').style.display='none'},2000)}});
     $('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')$('loginBtn').click()});
     $('menuToggle').addEventListener('click',()=>{$('sidebar').classList.add('open');$('sidebarBackdrop').classList.add('active')});
