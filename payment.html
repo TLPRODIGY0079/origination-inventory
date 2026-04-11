@@ -182,12 +182,22 @@ nav{height:64px;padding:0 5vw;display:flex;align-items:center;justify-content:sp
 const SUPABASE_URL='https://dzpdcfmlavcnhwmjjmbf.supabase.co';
 const SUPABASE_ANON_KEY='sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk';
 const sc=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const BACKEND='http://localhost:3000'; // change to your deployed URL in production
 
 // Redirect if no signup data
 const signupData=JSON.parse(localStorage.getItem('mb_signup')||'null');
 if(!signupData) window.location.replace('signup.html');
 
-function showError(msg){const e=document.getElementById('errorMsg');e.textContent=msg;e.style.display='block';setTimeout(()=>e.style.display='none',5000)}
+// Show success banner if returning from Stripe checkout
+if(new URLSearchParams(window.location.search).get('payment')==='success'){
+  document.getElementById('paymentForm').style.display='none';
+  document.getElementById('successScreen').style.display='block';
+  setTimeout(()=>document.getElementById('progressBar').style.width='100%',50);
+  localStorage.removeItem('mb_signup');
+  setTimeout(()=>window.location.replace('index.html'),3200);
+}
+
+function showError(msg){const e=document.getElementById('errorMsg');e.textContent=msg;e.style.display='block';setTimeout(()=>e.style.display='none',6000)}
 
 function switchMethod(m){
   document.querySelectorAll('.method-tab').forEach((t,i)=>{
@@ -201,8 +211,18 @@ function switchMethod(m){
 function formatCard(el){el.value=el.value.replace(/\D/g,'').replace(/(.{4})/g,'$1 ').trim()}
 function formatExpiry(el){el.value=el.value.replace(/\D/g,'').replace(/^(\d{2})(\d)/,'$1/$2')}
 
+function disableBtns(msg){
+  document.querySelectorAll('[id^=payBtn]').forEach(b=>{b.disabled=true;b.innerHTML=`<i class="fas fa-spinner fa-spin"></i> ${msg}`});
+}
+function enableBtns(){
+  document.getElementById('payBtn').innerHTML='<i class="fas fa-mobile-alt"></i> Send Payment Request';
+  document.getElementById('payBtnAirtel').innerHTML='<i class="fas fa-sim-card"></i> Send Payment Request';
+  document.getElementById('payBtnCard').innerHTML='<i class="fas fa-lock"></i> Pay K299.00';
+  document.querySelectorAll('[id^=payBtn]').forEach(b=>b.disabled=false);
+}
+
 async function processPayment(method){
-  // Validate inputs
+  // Validate
   if(method==='mtn'&&!document.getElementById('mtnNumber').value.trim()){showError('Enter your MTN MoMo number');return}
   if(method==='airtel'&&!document.getElementById('airtelNumber').value.trim()){showError('Enter your Airtel Money number');return}
   if(method==='card'){
@@ -210,32 +230,54 @@ async function processPayment(method){
     if(!document.getElementById('cardName').value.trim()){showError('Enter the name on your card');return}
   }
 
-  // Disable all pay buttons
-  document.querySelectorAll('[id^=payBtn]').forEach(b=>{b.disabled=true;b.innerHTML='<i class="fas fa-spinner fa-spin"></i> Processing...'});
-
-  // ── In production: call MTN MoMo API / Airtel API / Stripe here ──
-  // Simulating a 2-second payment processing delay
-  await new Promise(r=>setTimeout(r,2000));
+  disableBtns('Processing...');
 
   try{
-    // Update profile plan to 'pro' in Supabase
-    const{error}=await sc.from('profiles').update({plan:'pro'}).eq('id',signupData.userId);
-    if(error) throw error;
+    if(method==='card'){
+      // ── Stripe: redirect to hosted checkout ──────────────────────────────
+      const res=await fetch(`${BACKEND}/create-checkout-session`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({userId:signupData.userId,email:signupData.email||'',plan:'pro'})
+      });
+      if(!res.ok) throw new Error((await res.json()).error||'Server error');
+      const{url}=await res.json();
+      window.location.href=url; // → Stripe hosted page
 
-    // Show success screen
-    document.getElementById('paymentForm').style.display='none';
-    document.getElementById('successScreen').style.display='block';
-    setTimeout(()=>document.getElementById('progressBar').style.width='100%',50);
+    }else{
+      // ── MTN / Airtel: call backend stub ──────────────────────────────────
+      const phone=method==='mtn'
+        ?document.getElementById('mtnNumber').value.trim()
+        :document.getElementById('airtelNumber').value.trim();
 
-    // Clear signup temp data and redirect
-    localStorage.removeItem('mb_signup');
-    setTimeout(()=>window.location.replace('index.html'),3200);
+      const res=await fetch(`${BACKEND}/mtn-initiate`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({userId:signupData.userId,phone,amount:299,plan:'pro'})
+      });
+      if(!res.ok) throw new Error((await res.json()).error||'Server error');
 
+      // Poll for confirmation (simplified — replace with real callback)
+      disableBtns('Waiting for PIN confirmation...');
+      await new Promise(r=>setTimeout(r,5000)); // wait 5s for user to confirm on phone
+
+      const confirm=await fetch(`${BACKEND}/mtn-confirm`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({userId:signupData.userId,plan:'pro'})
+      });
+      if(!confirm.ok) throw new Error('Payment not confirmed — please try again');
+
+      document.getElementById('paymentForm').style.display='none';
+      document.getElementById('successScreen').style.display='block';
+      setTimeout(()=>document.getElementById('progressBar').style.width='100%',50);
+      localStorage.removeItem('mb_signup');
+      setTimeout(()=>window.location.replace('index.html'),3200);
+    }
   }catch(err){
     console.error(err);
-    document.querySelectorAll('[id^=payBtn]').forEach(b=>{b.disabled=false});
-    switchMethod(method); // re-render button text
-    showError('Payment failed — please try again or contact support');
+    enableBtns();
+    showError(err.message||'Payment failed — please try again or contact support');
   }
 }
 </script>
