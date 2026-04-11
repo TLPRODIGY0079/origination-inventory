@@ -6,12 +6,12 @@
 <meta name="theme-color" content="#007AFF">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://vercel.com/insights/script.js"></script>
+<script src="supabase.js"></script>
 <script>
 (async()=>{
   const _sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
   const{data}=await _sc.auth.getSession();
-  const params=new URLSearchParams(window.location.search);
-  if(!data?.session&&!params.get('signup')) window.location.replace('landing.html');
+  if(!data?.session) window.location.replace('login.html');
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1048,10 +1048,7 @@ function renderHistTable(){
   }
   async function logout(){
     await supabaseClient.auth.signOut();
-    currentUser=null;
-    cart=[];
-    $('appShell').classList.remove('active');
-    $('loginScreen').classList.remove('hidden');
+    window.location.replace('login.html');
   }
   function openSignupModal(){
     openModal('Create your free account',

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In — Marble POS</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(async()=>{
+  const _sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
+  const{data}=await _sc.auth.getSession();
+  if(data?.session) window.location.replace('index.html');
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--ac:#007AFF;--ac2:#0056B3;--ac3:rgba(0,122,255,.1);--gn:#34C759;--dn:#FF3B30;--tx:#1C1C1E;--tx2:#636366;--bg:#F2F2F7;--bg2:#fff;--bd:#D1D1D6;--sh2:0 8px 40px rgba(0,0,0,.12)}
+html{font-size:16px}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:var(--tx);background:linear-gradient(135deg,#f0f7ff 0%,#fff 60%,#f0fff4 100%);min-height:100vh;display:flex;flex-direction:column}
+input,button{font-family:inherit;font-size:16px}
+
+nav{height:64px;padding:0 5vw;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--bd)}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--tx)}
+.nav-logo img{height:32px}
+.nav-logo span{font-size:17px;font-weight:800}
+.nav-right{font-size:14px;font-weight:600;color:var(--tx2)}
+.nav-right a{color:var(--ac)}
+
+.page{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+.wrap{display:grid;grid-template-columns:1fr 1fr;background:var(--bg2);border-radius:24px;box-shadow:var(--sh2);overflow:hidden;width:100%;max-width:860px}
+@media(max-width:640px){.wrap{grid-template-columns:1fr}.side{display:none}}
+
+.side{background:linear-gradient(160deg,#1a1a2e,#16213e);padding:48px 40px;display:flex;flex-direction:column;justify-content:center;gap:28px}
+.side h2{font-size:24px;font-weight:800;color:#fff;line-height:1.3}
+.side p{font-size:14px;color:rgba(255,255,255,.55);line-height:1.7}
+.side-feat{display:flex;align-items:center;gap:12px;font-size:13px;color:rgba(255,255,255,.75)}
+.side-feat i{width:32px;height:32px;background:rgba(255,255,255,.08);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;flex-shrink:0}
+
+.form-side{padding:48px 40px}
+.form-side h1{font-size:22px;font-weight:800;margin-bottom:4px}
+.form-side .sub{font-size:13px;color:var(--tx2);margin-bottom:32px}
+
+.form-group{margin-bottom:18px}
+.form-group label{display:block;font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px}
+.form-input{width:100%;padding:13px 16px;border:1.5px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font-size:15px;outline:none;transition:border .2s,box-shadow .2s}
+.form-input:focus{border-color:var(--ac);box-shadow:0 0 0 3px var(--ac3)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 24px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;width:100%}
+.btn-primary{background:var(--ac);color:#fff}
+.btn-primary:hover:not(:disabled){background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,122,255,.3)}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed;transform:none}
+
+.error-box{display:none;background:#fff0ef;border:1px solid #ffd0ce;border-radius:8px;padding:10px 14px;font-size:13px;color:var(--dn);margin-bottom:16px}
+.divider{text-align:center;font-size:12px;color:var(--tx2);margin:16px 0}
+.signup-link{text-align:center;font-size:14px;color:var(--tx2);margin-top:20px}
+.signup-link a{color:var(--ac);font-weight:600}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="landing.html">
+    <img src="marble-logo.png" alt="Marble">
+    <span>Marble POS</span>
+  </a>
+  <div class="nav-right">No account? <a href="signup.html">Sign up free</a></div>
+</nav>
+
+<div class="page">
+  <div class="wrap">
+
+    <div class="side">
+      <div>
+        <h2>Welcome back 👋</h2>
+        <p>Sign in to access your inventory, process sales, and manage your store.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="side-feat"><i class="fas fa-cash-register"></i> Fast POS checkout</div>
+        <div class="side-feat"><i class="fas fa-warehouse"></i> Real-time inventory</div>
+        <div class="side-feat"><i class="fas fa-wifi-slash"></i> Works offline</div>
+        <div class="side-feat"><i class="fas fa-chart-bar"></i> Analytics & reports</div>
+      </div>
+    </div>
+
+    <div class="form-side">
+      <h1>Sign in</h1>
+      <p class="sub">Enter your email and password to continue</p>
+
+      <div class="error-box" id="errorBox"></div>
+
+      <div class="form-group">
+        <label>Email Address</label>
+        <input class="form-input" id="email" type="email" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input class="form-input" id="password" type="password" placeholder="Your password" autocomplete="current-password">
+      </div>
+
+      <button class="btn btn-primary" id="loginBtn" onclick="login()">
+        <i class="fas fa-arrow-right"></i> Sign In
+      </button>
+
+      <div class="signup-link">
+        Don't have an account? <a href="signup.html">Create one free</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
+
+function showError(msg){const b=document.getElementById('errorBox');b.textContent=msg;b.style.display='block'}
+function clearError(){document.getElementById('errorBox').style.display='none'}
+
+async function login(){
+  clearError();
+  const email=document.getElementById('email').value.trim();
+  const password=document.getElementById('password').value;
+  if(!email||!password){showError('Please enter your email and password');return}
+
+  const btn=document.getElementById('loginBtn');
+  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Signing in...';
+
+  const{error}=await sc.auth.signInWithPassword({email,password});
+  if(error){
+    showError(error.message==='Invalid login credentials'?'Incorrect email or password':error.message);
+    btn.disabled=false;btn.innerHTML='<i class="fas fa-arrow-right"></i> Sign In';
+    return;
+  }
+  window.location.replace('index.html');
+}
+
+document.getElementById('password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
+</script>
+</body>
+</html>

@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Create Account — Marble POS</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script defer src="https://vercel.com/insights/script.js"></script>
+<script src="supabase.js"></script>
 <script>
+  
 (async()=>{
   const _sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
   const{data}=await _sc.auth.getSession();
@@ -97,7 +100,7 @@ nav{height:64px;padding:0 5vw;display:flex;align-items:center;justify-content:sp
     <img src="marble-logo.png" alt="Marble">
     <span>Marble POS</span>
   </a>
-  <div class="nav-signin">Already have an account? <a href="index.html">Sign in</a></div>
+  <div class="nav-signin">Already have an account? <a href="login.html">Sign in</a></div>
 </nav>
 
 <div class="page">
@@ -143,7 +146,7 @@ nav{height:64px;padding:0 5vw;display:flex;align-items:center;justify-content:sp
         <div class="form-group"><label>Password</label><input class="form-input" id="password" type="password" placeholder="Min 6 characters" autocomplete="new-password"></div>
         <button class="btn btn-primary" onclick="goStep2()"><i class="fas fa-arrow-right"></i> Continue</button>
         <div class="divider">or</div>
-        <button class="btn btn-outline" onclick="window.location.href='index.html'"><i class="fas fa-sign-in-alt"></i> Sign in instead</button>
+        <button class="btn btn-outline" onclick="window.location.href='login.html'"><i class="fas fa-sign-in-alt"></i> Sign in instead</button>
       </div>
 
       <!-- STEP 2: Business -->
