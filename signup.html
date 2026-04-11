@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create Account — Marble POS</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(async()=>{
+  const _sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
+  const{data}=await _sc.auth.getSession();
+  if(data?.session) window.location.replace('index.html');
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--ac:#007AFF;--ac2:#0056B3;--ac3:rgba(0,122,255,.1);--gn:#34C759;--dn:#FF3B30;--wn:#FF9500;--tx:#1C1C1E;--tx2:#636366;--bg:#F2F2F7;--bg2:#fff;--bd:#D1D1D6;--sh:0 2px 12px rgba(0,0,0,.06);--sh2:0 8px 40px rgba(0,0,0,.12)}
+html{font-size:16px}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:var(--tx);background:linear-gradient(135deg,#f0f7ff 0%,#fff 60%,#f0fff4 100%);min-height:100vh;display:flex;flex-direction:column}
+input,select,button{font-family:inherit;font-size:16px}
+
+/* NAV */
+nav{height:64px;padding:0 5vw;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:10}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--tx)}
+.nav-logo img{height:32px}
+.nav-logo span{font-size:17px;font-weight:800}
+.nav-signin{font-size:14px;font-weight:600;color:var(--tx2)}
+.nav-signin a{color:var(--ac)}
+
+/* LAYOUT */
+.page{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+.signup-wrap{display:grid;grid-template-columns:1fr 1fr;gap:0;background:var(--bg2);border-radius:24px;box-shadow:var(--sh2);overflow:hidden;width:100%;max-width:900px}
+@media(max-width:700px){.signup-wrap{grid-template-columns:1fr}.side-panel{display:none}}
+
+/* LEFT PANEL */
+.side-panel{background:linear-gradient(160deg,#1a1a2e,#16213e);padding:48px 40px;display:flex;flex-direction:column;justify-content:space-between}
+.side-panel h2{font-size:26px;font-weight:800;color:#fff;line-height:1.3;margin-bottom:12px}
+.side-panel p{font-size:14px;color:rgba(255,255,255,.6);line-height:1.6;margin-bottom:32px}
+.side-features{display:flex;flex-direction:column;gap:14px}
+.side-feat{display:flex;align-items:center;gap:12px;font-size:13px;color:rgba(255,255,255,.8)}
+.side-feat i{width:32px;height:32px;background:rgba(255,255,255,.08);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;flex-shrink:0}
+.side-bottom{font-size:12px;color:rgba(255,255,255,.3);margin-top:40px}
+
+/* RIGHT PANEL — FORM */
+.form-panel{padding:48px 40px}
+.form-panel h1{font-size:22px;font-weight:800;margin-bottom:4px}
+.form-panel .sub{font-size:13px;color:var(--tx2);margin-bottom:28px}
+
+/* STEPS */
+.steps{display:flex;gap:0;margin-bottom:32px}
+.step{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative}
+.step:not(:last-child)::after{content:'';position:absolute;top:14px;left:50%;width:100%;height:2px;background:var(--bd);z-index:0}
+.step.done::after{background:var(--ac)}
+.step-dot{width:28px;height:28px;border-radius:50%;background:var(--bg);border:2px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--tx2);z-index:1;transition:all .3s}
+.step.active .step-dot{background:var(--ac);border-color:var(--ac);color:#fff}
+.step.done .step-dot{background:var(--gn);border-color:var(--gn);color:#fff}
+.step-label{font-size:10px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px}
+.step.active .step-label{color:var(--ac)}
+
+/* PLAN CARDS */
+.plan-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.plan-card{border:2px solid var(--bd);border-radius:14px;padding:16px;cursor:pointer;transition:all .2s;position:relative}
+.plan-card:hover{border-color:var(--ac)}
+.plan-card.selected{border-color:var(--ac);background:var(--ac3)}
+.plan-card input[type=radio]{position:absolute;opacity:0;pointer-events:none}
+.plan-name{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tx2);margin-bottom:4px}
+.plan-price{font-size:22px;font-weight:800;margin-bottom:6px}
+.plan-price span{font-size:13px;font-weight:500;color:var(--tx2)}
+.plan-perks{font-size:11px;color:var(--tx2);line-height:1.7}
+.plan-badge{position:absolute;top:-10px;right:12px;background:var(--ac);color:#fff;font-size:10px;font-weight:700;padding:2px 10px;border-radius:20px}
+
+/* FORM ELEMENTS */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px}
+.form-input{width:100%;padding:12px 16px;border:1.5px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font-size:15px;outline:none;transition:border .2s,box-shadow .2s}
+.form-input:focus{border-color:var(--ac);box-shadow:0 0 0 3px var(--ac3)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:480px){.form-row{grid-template-columns:1fr}.plan-cards{grid-template-columns:1fr}}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 24px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;width:100%}
+.btn-primary{background:var(--ac);color:#fff}
+.btn-primary:hover:not(:disabled){background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,122,255,.3)}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.btn-outline{background:transparent;border:1.5px solid var(--bd);color:var(--tx)}
+.btn-outline:hover{border-color:var(--ac);color:var(--ac)}
+
+.error-msg{color:var(--dn);font-size:13px;margin-bottom:12px;display:none;padding:10px 14px;background:#fff0ef;border-radius:8px;border:1px solid #ffd0ce}
+.divider{text-align:center;font-size:12px;color:var(--tx2);margin:16px 0}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="landing.html">
+    <img src="marble-logo.png" alt="Marble">
+    <span>Marble POS</span>
+  </a>
+  <div class="nav-signin">Already have an account? <a href="index.html">Sign in</a></div>
+</nav>
+
+<div class="page">
+  <div class="signup-wrap">
+
+    <!-- LEFT PANEL -->
+    <div class="side-panel">
+      <div>
+        <h2>Run your store smarter 🚀</h2>
+        <p>Join hundreds of retailers across Zambia using Marble POS to manage inventory, process sales, and grow their business.</p>
+        <div class="side-features">
+          <div class="side-feat"><i class="fas fa-cash-register"></i> Fast POS checkout — process sales in seconds</div>
+          <div class="side-feat"><i class="fas fa-warehouse"></i> Real-time inventory with low-stock alerts</div>
+          <div class="side-feat"><i class="fas fa-wifi-slash"></i> Works offline — syncs when back online</div>
+          <div class="side-feat"><i class="fas fa-chart-bar"></i> Analytics, reports & cashier stats</div>
+          <div class="side-feat"><i class="fas fa-user-shield"></i> Role-based access for your whole team</div>
+        </div>
+      </div>
+      <div class="side-bottom">No credit card required for Free plan · Cancel anytime</div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="form-panel">
+      <h1>Create your account</h1>
+      <p class="sub">Set up your business in under 2 minutes</p>
+
+      <!-- STEPS -->
+      <div class="steps">
+        <div class="step active" id="step1ind"><div class="step-dot">1</div><div class="step-label">Account</div></div>
+        <div class="step" id="step2ind"><div class="step-dot">2</div><div class="step-label">Business</div></div>
+        <div class="step" id="step3ind"><div class="step-dot">3</div><div class="step-label">Plan</div></div>
+      </div>
+
+      <div id="errorMsg" class="error-msg"></div>
+
+      <!-- STEP 1: Account -->
+      <div id="step1">
+        <div class="form-row">
+          <div class="form-group"><label>First Name</label><input class="form-input" id="firstName" placeholder="John" autocomplete="given-name"></div>
+          <div class="form-group"><label>Last Name</label><input class="form-input" id="lastName" placeholder="Banda" autocomplete="family-name"></div>
+        </div>
+        <div class="form-group"><label>Email Address</label><input class="form-input" id="email" type="email" placeholder="you@example.com" autocomplete="email"></div>
+        <div class="form-group"><label>Password</label><input class="form-input" id="password" type="password" placeholder="Min 6 characters" autocomplete="new-password"></div>
+        <button class="btn btn-primary" onclick="goStep2()"><i class="fas fa-arrow-right"></i> Continue</button>
+        <div class="divider">or</div>
+        <button class="btn btn-outline" onclick="window.location.href='index.html'"><i class="fas fa-sign-in-alt"></i> Sign in instead</button>
+      </div>
+
+      <!-- STEP 2: Business -->
+      <div id="step2" style="display:none">
+        <div class="form-group"><label>Business / Shop Name</label><input class="form-input" id="bizName" placeholder="e.g. Chanda's Grocery" autocomplete="organization"></div>
+        <div class="form-group"><label>Business Type</label>
+          <select class="form-input" id="bizType">
+            <option value="grocery">Grocery / Supermarket</option>
+            <option value="electronics">Electronics Shop</option>
+            <option value="pharmacy">Pharmacy</option>
+            <option value="clothing">Clothing & Fashion</option>
+            <option value="hardware">Hardware Store</option>
+            <option value="restaurant">Restaurant / Takeaway</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Phone Number</label><input class="form-input" id="phone" type="tel" placeholder="+260 97X XXX XXX" autocomplete="tel"></div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-outline" style="width:auto;padding:13px 20px" onclick="goStep1()"><i class="fas fa-arrow-left"></i></button>
+          <button class="btn btn-primary" onclick="goStep3()"><i class="fas fa-arrow-right"></i> Continue</button>
+        </div>
+      </div>
+
+      <!-- STEP 3: Plan -->
+      <div id="step3" style="display:none">
+        <div class="plan-cards">
+          <label class="plan-card selected" id="planFree">
+            <input type="radio" name="plan" value="free" checked onchange="selectPlan('free')">
+            <div class="plan-name">Free</div>
+            <div class="plan-price">K0<span>/mo</span></div>
+            <div class="plan-perks">✓ Basic POS<br>✓ Up to 50 products<br>✓ Sales history<br>✗ Analytics<br>✗ Suppliers</div>
+          </label>
+          <label class="plan-card" id="planPro">
+            <div class="plan-badge">Popular</div>
+            <input type="radio" name="plan" value="pro" onchange="selectPlan('pro')">
+            <div class="plan-name">Pro</div>
+            <div class="plan-price">K299<span>/mo</span></div>
+            <div class="plan-perks">✓ Everything in Free<br>✓ Unlimited products<br>✓ Full analytics<br>✓ Suppliers<br>✓ Serial/IMEI</div>
+          </label>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-outline" style="width:auto;padding:13px 20px" onclick="goStep2()"><i class="fas fa-arrow-left"></i></button>
+          <button class="btn btn-primary" id="createBtn" onclick="createAccount()"><i class="fas fa-rocket"></i> Create Account</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL='https://dzpdcfmlavcnhwmjjmbf.supabase.co';
+const SUPABASE_ANON_KEY='sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk';
+const sc=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+let selectedPlan='free';
+
+// Pre-select plan if coming from pricing page
+if(new URLSearchParams(window.location.search).get('plan')==='pro') selectPlan('pro');
+
+function showError(msg){const e=document.getElementById('errorMsg');e.textContent=msg;e.style.display='block';setTimeout(()=>e.style.display='none',5000)}
+function clearError(){document.getElementById('errorMsg').style.display='none'}
+
+function setStep(n){
+  [1,2,3].forEach(i=>{
+    document.getElementById('step'+i).style.display=i===n?'block':'none';
+    const ind=document.getElementById('step'+i+'ind');
+    ind.className='step'+(i===n?' active':i<n?' done':'');
+    ind.querySelector('.step-dot').innerHTML=i<n?'<i class="fas fa-check"></i>':i;
+  });
+  clearError();
+}
+
+function goStep1(){setStep(1)}
+function goStep2(){
+  const first=document.getElementById('firstName').value.trim();
+  const last=document.getElementById('lastName').value.trim();
+  const email=document.getElementById('email').value.trim();
+  const pass=document.getElementById('password').value;
+  if(!first||!last){showError('Enter your first and last name');return}
+  if(!email||!email.includes('@')){showError('Enter a valid email address');return}
+  if(pass.length<6){showError('Password must be at least 6 characters');return}
+  setStep(2);
+}
+function goStep3(){
+  if(!document.getElementById('bizName').value.trim()){showError('Enter your business name');return}
+  setStep(3);
+}
+
+function selectPlan(plan){
+  selectedPlan=plan;
+  document.getElementById('planFree').className='plan-card'+(plan==='free'?' selected':'');
+  document.getElementById('planPro').className='plan-card'+(plan==='pro'?' selected':'');
+}
+
+async function createAccount(){
+  const btn=document.getElementById('createBtn');
+  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Creating...';
+  clearError();
+
+  const email=document.getElementById('email').value.trim();
+  const pass=document.getElementById('password').value;
+  const fullName=document.getElementById('firstName').value.trim()+' '+document.getElementById('lastName').value.trim();
+  const bizName=document.getElementById('bizName').value.trim();
+  const bizType=document.getElementById('bizType').value;
+  const phone=document.getElementById('phone').value.trim();
+
+  // 1. Create Supabase auth user
+  const{data,error}=await sc.auth.signUp({
+    email,password:pass,
+    options:{data:{full_name:fullName,business_name:bizName}}
+  });
+  if(error){showError(error.message);btn.disabled=false;btn.innerHTML='<i class="fas fa-rocket"></i> Create Account';return}
+
+  // 2. Upsert profile row
+  await sc.from('profiles').upsert({
+    id:data.user.id,
+    full_name:fullName,
+    role:'admin',
+    plan:selectedPlan==='pro'?'free':'free', // stays free until payment confirmed
+    onboarding_completed:true
+  });
+
+  // 3. Store signup data for payment page
+  localStorage.setItem('mb_signup',JSON.stringify({
+    userId:data.user.id,
+    fullName,bizName,bizType,phone,
+    plan:selectedPlan
+  }));
+
+  // 4. Route based on plan
+  if(selectedPlan==='pro'){
+    window.location.href='payment.html';
+  }else{
+    window.location.href='index.html';
+  }
+}
+</script>
+</body>
+</html>

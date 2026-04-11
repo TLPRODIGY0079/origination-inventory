@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Complete Payment — Marble POS</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--ac:#007AFF;--ac2:#0056B3;--ac3:rgba(0,122,255,.1);--gn:#34C759;--dn:#FF3B30;--wn:#FF9500;--tx:#1C1C1E;--tx2:#636366;--bg:#F2F2F7;--bg2:#fff;--bd:#D1D1D6;--sh2:0 8px 40px rgba(0,0,0,.12)}
+html{font-size:16px}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:var(--tx);background:linear-gradient(135deg,#f0f7ff 0%,#fff 60%,#f0fff4 100%);min-height:100vh;display:flex;flex-direction:column}
+input,select,button{font-family:inherit;font-size:16px}
+
+nav{height:64px;padding:0 5vw;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:10}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--tx)}
+.nav-logo img{height:32px}
+.nav-logo span{font-size:17px;font-weight:800}
+
+.page{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+.pay-wrap{display:grid;grid-template-columns:1fr 380px;gap:24px;width:100%;max-width:860px}
+@media(max-width:700px){.pay-wrap{grid-template-columns:1fr}}
+
+/* ORDER SUMMARY */
+.summary-card{background:var(--bg2);border-radius:20px;padding:32px;box-shadow:var(--sh2)}
+.summary-card h2{font-size:18px;font-weight:800;margin-bottom:20px}
+.summary-plan{background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:14px;padding:20px;color:#fff;margin-bottom:20px}
+.summary-plan .plan-name{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.5);margin-bottom:4px}
+.summary-plan .plan-price{font-size:32px;font-weight:800;margin-bottom:2px}
+.summary-plan .plan-price span{font-size:14px;font-weight:500;opacity:.6}
+.summary-plan .plan-cycle{font-size:12px;color:rgba(255,255,255,.5)}
+.summary-line{display:flex;justify-content:space-between;font-size:14px;padding:8px 0;border-bottom:1px solid var(--bd)}
+.summary-line:last-child{border:none;font-weight:800;font-size:16px;padding-top:12px}
+.summary-perks{margin-top:20px}
+.summary-perks h4{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tx2);margin-bottom:10px}
+.perk{display:flex;align-items:center;gap:10px;font-size:13px;padding:5px 0;color:var(--tx2)}
+.perk i{color:var(--gn);width:16px}
+
+/* PAYMENT FORM */
+.pay-card{background:var(--bg2);border-radius:20px;padding:32px;box-shadow:var(--sh2)}
+.pay-card h2{font-size:18px;font-weight:800;margin-bottom:6px}
+.pay-card .sub{font-size:13px;color:var(--tx2);margin-bottom:24px}
+
+.method-tabs{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap}
+.method-tab{flex:1;min-width:80px;padding:10px 8px;border:2px solid var(--bd);border-radius:10px;text-align:center;cursor:pointer;transition:all .2s;font-size:12px;font-weight:700;color:var(--tx2)}
+.method-tab:hover{border-color:var(--ac);color:var(--ac)}
+.method-tab.active{border-color:var(--ac);background:var(--ac3);color:var(--ac)}
+.method-tab i{display:block;font-size:20px;margin-bottom:4px}
+
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px}
+.form-input{width:100%;padding:12px 16px;border:1.5px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);font-size:15px;outline:none;transition:border .2s,box-shadow .2s}
+.form-input:focus{border-color:var(--ac);box-shadow:0 0 0 3px var(--ac3)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 24px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;width:100%}
+.btn-primary{background:var(--ac);color:#fff}
+.btn-primary:hover:not(:disabled){background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,122,255,.3)}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.btn-success{background:var(--gn);color:#fff}
+.btn-success:hover:not(:disabled){filter:brightness(1.08);transform:translateY(-1px)}
+.btn-success:disabled{opacity:.6;cursor:not-allowed;transform:none}
+
+.secure-note{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tx2);margin-top:12px;justify-content:center}
+.secure-note i{color:var(--gn)}
+
+.error-msg{color:var(--dn);font-size:13px;margin-bottom:12px;display:none;padding:10px 14px;background:#fff0ef;border-radius:8px;border:1px solid #ffd0ce}
+.success-screen{display:none;text-align:center;padding:20px 0}
+.success-screen .icon{font-size:64px;margin-bottom:16px}
+.success-screen h3{font-size:20px;font-weight:800;margin-bottom:8px}
+.success-screen p{font-size:14px;color:var(--tx2);margin-bottom:24px}
+
+/* Method panels */
+.method-panel{display:none}
+.method-panel.active{display:block}
+.momo-logo{display:flex;align-items:center;gap:10px;background:var(--bg);border-radius:10px;padding:12px 16px;margin-bottom:16px}
+.momo-logo i{font-size:24px;color:var(--wn)}
+.momo-logo span{font-size:13px;font-weight:600}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="landing.html">
+    <img src="marble-logo.png" alt="Marble">
+    <span>Marble POS</span>
+  </a>
+  <div style="font-size:13px;color:var(--tx2)"><i class="fas fa-lock" style="color:var(--gn);margin-right:6px"></i>Secure Checkout</div>
+</nav>
+
+<div class="page">
+  <div class="pay-wrap">
+
+    <!-- ORDER SUMMARY -->
+    <div class="summary-card">
+      <h2>Order Summary</h2>
+      <div class="summary-plan">
+        <div class="plan-name">Pro Plan</div>
+        <div class="plan-price">K299<span>/mo</span></div>
+        <div class="plan-cycle">Billed monthly · Cancel anytime</div>
+      </div>
+      <div class="summary-line"><span>Pro Plan (1 month)</span><span>K299.00</span></div>
+      <div class="summary-line"><span>Setup fee</span><span>K0.00</span></div>
+      <div class="summary-line"><span>Total due today</span><span>K299.00</span></div>
+      <div class="summary-perks">
+        <h4>What you get</h4>
+        <div class="perk"><i class="fas fa-check"></i> Unlimited products & variants</div>
+        <div class="perk"><i class="fas fa-check"></i> Full analytics & reports</div>
+        <div class="perk"><i class="fas fa-check"></i> Supplier management</div>
+        <div class="perk"><i class="fas fa-check"></i> Serial / IMEI tracking</div>
+        <div class="perk"><i class="fas fa-check"></i> Up to 5 user accounts</div>
+        <div class="perk"><i class="fas fa-check"></i> Offline mode + auto-sync</div>
+        <div class="perk"><i class="fas fa-check"></i> Priority support</div>
+      </div>
+    </div>
+
+    <!-- PAYMENT FORM -->
+    <div class="pay-card">
+      <h2>Complete Payment</h2>
+      <p class="sub">Choose your payment method</p>
+
+      <div id="errorMsg" class="error-msg"></div>
+
+      <!-- SUCCESS SCREEN -->
+      <div class="success-screen" id="successScreen">
+        <div class="icon">🎉</div>
+        <h3>Payment Successful!</h3>
+        <p>Your Pro plan is now active. Redirecting to your POS system...</p>
+        <div style="width:100%;background:var(--bg);border-radius:4px;height:4px;overflow:hidden">
+          <div id="progressBar" style="height:100%;background:var(--gn);width:0%;transition:width 3s linear"></div>
+        </div>
+      </div>
+
+      <!-- PAYMENT METHODS -->
+      <div id="paymentForm">
+        <div class="method-tabs">
+          <div class="method-tab active" onclick="switchMethod('mtn')"><i class="fas fa-mobile-alt"></i>MTN MoMo</div>
+          <div class="method-tab" onclick="switchMethod('airtel')"><i class="fas fa-sim-card"></i>Airtel Money</div>
+          <div class="method-tab" onclick="switchMethod('card')"><i class="fas fa-credit-card"></i>Card</div>
+        </div>
+
+        <!-- MTN MoMo -->
+        <div class="method-panel active" id="panel-mtn">
+          <div class="momo-logo"><i class="fas fa-mobile-alt"></i><span>MTN Mobile Money</span></div>
+          <div class="form-group"><label>MTN MoMo Number</label><input class="form-input" id="mtnNumber" type="tel" placeholder="097X XXX XXX"></div>
+          <div class="form-group"><label>Account Name</label><input class="form-input" id="mtnName" placeholder="Name on MoMo account"></div>
+          <p style="font-size:12px;color:var(--tx2);margin-bottom:16px;line-height:1.6">You will receive a payment prompt on your phone. Enter your MoMo PIN to confirm K299.00.</p>
+          <button class="btn btn-success" id="payBtn" onclick="processPayment('mtn')"><i class="fas fa-mobile-alt"></i> Send Payment Request</button>
+        </div>
+
+        <!-- Airtel Money -->
+        <div class="method-panel" id="panel-airtel">
+          <div class="momo-logo"><i class="fas fa-sim-card" style="color:#FF3B30"></i><span>Airtel Money</span></div>
+          <div class="form-group"><label>Airtel Money Number</label><input class="form-input" id="airtelNumber" type="tel" placeholder="077X XXX XXX"></div>
+          <div class="form-group"><label>Account Name</label><input class="form-input" id="airtelName" placeholder="Name on Airtel Money account"></div>
+          <p style="font-size:12px;color:var(--tx2);margin-bottom:16px;line-height:1.6">You will receive a payment prompt on your phone. Enter your Airtel Money PIN to confirm K299.00.</p>
+          <button class="btn btn-success" id="payBtnAirtel" onclick="processPayment('airtel')"><i class="fas fa-sim-card"></i> Send Payment Request</button>
+        </div>
+
+        <!-- Card -->
+        <div class="method-panel" id="panel-card">
+          <div class="form-group"><label>Card Number</label><input class="form-input" id="cardNum" placeholder="1234 5678 9012 3456" maxlength="19" oninput="formatCard(this)"></div>
+          <div class="form-row">
+            <div class="form-group"><label>Expiry</label><input class="form-input" id="cardExp" placeholder="MM/YY" maxlength="5" oninput="formatExpiry(this)"></div>
+            <div class="form-group"><label>CVV</label><input class="form-input" id="cardCvv" placeholder="123" maxlength="3" type="password"></div>
+          </div>
+          <div class="form-group"><label>Name on Card</label><input class="form-input" id="cardName" placeholder="John Banda"></div>
+          <button class="btn btn-primary" id="payBtnCard" onclick="processPayment('card')"><i class="fas fa-lock"></i> Pay K299.00</button>
+        </div>
+
+        <div class="secure-note"><i class="fas fa-shield-alt"></i> Payments are encrypted and secure</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL='https://dzpdcfmlavcnhwmjjmbf.supabase.co';
+const SUPABASE_ANON_KEY='sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk';
+const sc=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+// Redirect if no signup data
+const signupData=JSON.parse(localStorage.getItem('mb_signup')||'null');
+if(!signupData) window.location.replace('signup.html');
+
+function showError(msg){const e=document.getElementById('errorMsg');e.textContent=msg;e.style.display='block';setTimeout(()=>e.style.display='none',5000)}
+
+function switchMethod(m){
+  document.querySelectorAll('.method-tab').forEach((t,i)=>{
+    const methods=['mtn','airtel','card'];
+    t.className='method-tab'+(methods[i]===m?' active':'');
+  });
+  document.querySelectorAll('.method-panel').forEach(p=>p.className='method-panel');
+  document.getElementById('panel-'+m).className='method-panel active';
+}
+
+function formatCard(el){el.value=el.value.replace(/\D/g,'').replace(/(.{4})/g,'$1 ').trim()}
+function formatExpiry(el){el.value=el.value.replace(/\D/g,'').replace(/^(\d{2})(\d)/,'$1/$2')}
+
+async function processPayment(method){
+  // Validate inputs
+  if(method==='mtn'&&!document.getElementById('mtnNumber').value.trim()){showError('Enter your MTN MoMo number');return}
+  if(method==='airtel'&&!document.getElementById('airtelNumber').value.trim()){showError('Enter your Airtel Money number');return}
+  if(method==='card'){
+    if(document.getElementById('cardNum').value.replace(/\s/g,'').length<16){showError('Enter a valid card number');return}
+    if(!document.getElementById('cardName').value.trim()){showError('Enter the name on your card');return}
+  }
+
+  // Disable all pay buttons
+  document.querySelectorAll('[id^=payBtn]').forEach(b=>{b.disabled=true;b.innerHTML='<i class="fas fa-spinner fa-spin"></i> Processing...'});
+
+  // ── In production: call MTN MoMo API / Airtel API / Stripe here ──
+  // Simulating a 2-second payment processing delay
+  await new Promise(r=>setTimeout(r,2000));
+
+  try{
+    // Update profile plan to 'pro' in Supabase
+    const{error}=await sc.from('profiles').update({plan:'pro'}).eq('id',signupData.userId);
+    if(error) throw error;
+
+    // Show success screen
+    document.getElementById('paymentForm').style.display='none';
+    document.getElementById('successScreen').style.display='block';
+    setTimeout(()=>document.getElementById('progressBar').style.width='100%',50);
+
+    // Clear signup temp data and redirect
+    localStorage.removeItem('mb_signup');
+    setTimeout(()=>window.location.replace('index.html'),3200);
+
+  }catch(err){
+    console.error(err);
+    document.querySelectorAll('[id^=payBtn]').forEach(b=>{b.disabled=false});
+    switchMethod(method); // re-render button text
+    showError('Payment failed — please try again or contact support');
+  }
+}
+</script>
+</body>
+</html>

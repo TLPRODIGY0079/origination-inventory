@@ -2,13 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#007AFF">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://vercel.com/insights/script.js"></script>
 <script>
 (async()=>{
   const _sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
   const{data}=await _sc.auth.getSession();
-  if(!data?.session) window.location.replace('landing.html');
+  const params=new URLSearchParams(window.location.search);
+  if(!data?.session&&!params.get('signup')) window.location.replace('landing.html');
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -595,7 +598,7 @@ async function restoreSession(){
 }
 // Plan hierarchy: free < pro < enterprise
 const PLAN_LEVELS={free:0,pro:1,enterprise:2};
-const PAGE_MIN_PLAN={reports:'pro',users:'pro'}; // pages that require a paid plan
+const PAGE_MIN_PLAN={reports:'pro',users:'pro',suppliers:'pro'}; // pages that require a paid plan
 
 function requiresPlan(page){
   const min=PAGE_MIN_PLAN[page];
@@ -624,10 +627,32 @@ function showUpgradeModal(requiredPlan){
     `<div style="text-align:center;padding:16px 0">
       <div style="font-size:48px;margin-bottom:16px">🔒</div>
       <p style="font-size:15px;font-weight:600;margin-bottom:8px">This feature requires the <span style="color:var(--ac);text-transform:capitalize">${requiredPlan}</span> plan</p>
-      <p style="font-size:13px;color:var(--tx2)">Your current plan: <strong style="text-transform:capitalize">${currentUser.plan||'free'}</strong></p>
+      <p style="font-size:13px;color:var(--tx2);margin-bottom:16px">Your current plan: <strong style="text-transform:capitalize">${currentUser.plan||'free'}</strong></p>
+      <div style="background:var(--bg);border-radius:var(--rs);padding:16px;text-align:left;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">🚀 Pro Plan — K299/mo</div>
+        <div style="font-size:12px;color:var(--tx2);line-height:1.8">✓ Suppliers management<br>✓ Full analytics & reports<br>✓ Multi-user access<br>✓ Serial/IMEI tracking</div>
+      </div>
     </div>`,
-    `<button class="btn btn-outline btn-sm" onclick="closeModal()">Maybe Later</button><button class="btn btn-primary btn-sm" onclick="closeModal()"><i class="fas fa-arrow-up"></i> Upgrade Plan</button>`
+    `<button class="btn btn-outline btn-sm" onclick="closeModal()">Maybe Later</button><button class="btn btn-primary btn-sm" onclick="upgradePlan('pro')"><i class="fas fa-arrow-up"></i> Upgrade to Pro</button>`
   );
+}
+
+async function upgradePlan(plan){
+  closeModal();
+  // In production: redirect to payment gateway (MTN MoMo / Stripe)
+  // For now: simulate successful payment and write to Supabase
+  const confirmed=confirm(`Upgrade to ${plan.toUpperCase()} plan?\n\nIn production this opens MTN MoMo / Stripe.\nClick OK to simulate a successful payment.`);
+  if(!confirmed) return;
+  try{
+    const{error}=await supabaseClient.from('profiles').update({plan}).eq('id',currentUser.id);
+    if(error) throw error;
+    currentUser.plan=plan;
+    toast(`🎉 Upgraded to ${plan.toUpperCase()}! Refreshing...`,'success');
+    setTimeout(()=>location.reload(),1500);
+  }catch(err){
+    console.error(err);
+    toast('Upgrade failed — try again','error');
+  }
 }
 
 function toast(msg,type='info'){
@@ -1028,12 +1053,76 @@ function renderHistTable(){
     $('appShell').classList.remove('active');
     $('loginScreen').classList.remove('hidden');
   }
+  function openSignupModal(){
+    openModal('Create your free account',
+      `<div class="form-group"><label>Full Name</label><input class="form-input" id="suName" placeholder="Your name"></div>
+       <div class="form-group"><label>Email</label><input class="form-input" id="suEmail" type="email" placeholder="you@example.com"></div>
+       <div class="form-group"><label>Password</label><input class="form-input" id="suPass" type="password" placeholder="Min 6 characters"></div>
+       <div class="login-error" id="suError"></div>`,
+      `<button class="btn btn-outline btn-sm" onclick="closeModal()">Cancel</button><button class="btn btn-primary btn-sm" id="suBtn"><i class="fas fa-user-plus"></i> Create Account</button>`
+    );
+    setTimeout(()=>{
+      $('suBtn').addEventListener('click',async()=>{
+        const name=$('suName').value.trim();
+        const email=$('suEmail').value.trim();
+        const pass=$('suPass').value.trim();
+        if(!name||!email||!pass){$('suError').textContent='All fields required';$('suError').style.display='block';return}
+        $('suBtn').disabled=true;$('suBtn').textContent='Creating...';
+        const{data,error}=await supabaseClient.auth.signUp({email,password:pass,options:{data:{full_name:name}}});
+        if(error){$('suError').textContent=error.message;$('suError').style.display='block';$('suBtn').disabled=false;$('suBtn').innerHTML='<i class="fas fa-user-plus"></i> Create Account';return}
+        // Insert profile row
+        await supabaseClient.from('profiles').upsert({id:data.user.id,full_name:name,role:'admin',plan:'free',onboarding_completed:false});
+        closeModal();
+        toast('Account created! Check your email to confirm.','success');
+      });
+    },50);
+  }
+
+  function showOnboarding(){
+    $('appShell').classList.remove('active');
+    openModal('Welcome to Marble POS 👋',
+      `<div style="text-align:center;margin-bottom:20px"><div style="font-size:48px">🏪</div><p style="color:var(--tx2);font-size:14px;margin-top:8px">Let's set up your store in 30 seconds</p></div>
+       <div class="form-group"><label>Business / Shop Name</label><input class="form-input" id="obBizName" placeholder="e.g. Chanda's Grocery"></div>
+       <div class="form-group"><label>Your Role</label><select class="form-input" id="obRole"><option value="admin">Owner / Admin</option><option value="manager">Manager</option></select></div>`,
+      `<button class="btn btn-primary" id="obBtn"><i class="fas fa-arrow-right"></i> Let's Go</button>`
+    );
+    // Prevent closing onboarding by clicking outside
+    $('modalClose').style.display='none';
+    setTimeout(()=>{
+      $('obBtn').addEventListener('click',async()=>{
+        const bizName=$('obBizName').value.trim();
+        if(!bizName){toast('Enter your business name','error');return}
+        $('obBtn').disabled=true;
+        await supabaseClient.from('profiles').update({onboarding_completed:true,role:$('obRole').value}).eq('id',currentUser.id);
+        // Store business name in profile metadata
+        await supabaseClient.auth.updateUser({data:{business_name:bizName}});
+        currentUser.onboarding_completed=true;
+        $('modalClose').style.display='';
+        closeModal();
+        $('appShell').classList.add('active');
+        toast('Welcome to Marble POS! 🎉','success');
+        renderSidebar();
+        navigate('dashboard');
+      });
+    },50);
+  }
+
   async function startApp(){
+    // Register service worker for offline PWA support
+    if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+    // Handle ?signup=1 from landing page CTA
+    if(new URLSearchParams(window.location.search).get('signup')){
+      // Show signup after a brief delay so the page renders first
+      setTimeout(openSignupModal,400);
+    }
     const loaded=await loadDB();
     DB=loaded||DB;
     syncOfflineQueue();
     const restored=await restoreSession();
-    if(restored)return;
+    if(restored){
+      if(!currentUser.onboarding_completed) showOnboarding();
+      return;
+    }
     $('loginBtn').addEventListener('click',async()=>{
       const email=$('loginUser').value.trim();
       const password=$('loginPass').value.trim();
