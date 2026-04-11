@@ -1,29 +1,171 @@
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const express  = require('express');
+const cors     = require('cors');
+const axios    = require('axios');
+const { v4: uuidv4 } = require('uuid');
+const stripe   = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY  // service-role key — can bypass RLS
+  process.env.SUPABASE_SERVICE_KEY   // service-role — bypasses RLS safely on backend
 );
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 app.use(cors({ origin: process.env.FRONTEND_URL }));
 
-// ── Raw body for Stripe webhook (must come BEFORE express.json()) ─────────────
+// ── Raw body for Stripe webhook (MUST come before express.json) ───────────────
 app.post('/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
 
-// ── JSON body for all other routes ────────────────────────────────────────────
+// ── JSON body for everything else ─────────────────────────────────────────────
 app.use(express.json());
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /create-checkout-session
+
+// =============================================================================
+// MTN MoMo — token cache (access tokens expire after 1 hour)
+// =============================================================================
+let _mtnToken = null;
+let _mtnTokenExpiry = 0;
+
+async function getMtnToken() {
+  if (_mtnToken && Date.now() < _mtnTokenExpiry) return _mtnToken;
+
+  const credentials = Buffer.from(
+    `${process.env.MTN_API_USER}:${process.env.MTN_API_KEY}`
+  ).toString('base64');
+
+  const { data } = await axios.post(
+    `${process.env.MTN_BASE_URL}/collection/token/`,
+    {},
+    {
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        'Ocp-Apim-Subscription-Key': process.env.MTN_SUBSCRIPTION_KEY
+      }
+    }
+  );
+
+  _mtnToken = data.access_token;
+  _mtnTokenExpiry = Date.now() + (data.expires_in - 60) * 1000; // refresh 1 min early
+  return _mtnToken;
+}
+
+
+// =============================================================================
+// POST /mtn-initiate
+// Body: { userId, phone, amount, plan }
+// Sends a payment prompt to the user's MTN MoMo phone
+// =============================================================================
+app.post('/mtn-initiate', async (req, res) => {
+  const { userId, phone, amount, plan } = req.body;
+  if (!userId || !phone || !amount) {
+    return res.status(400).json({ error: 'userId, phone and amount are required' });
+  }
+
+  const referenceId = uuidv4(); // unique per transaction
+
+  try {
+    const token = await getMtnToken();
+
+    await axios.post(
+      `${process.env.MTN_BASE_URL}/collection/v1_0/requesttopay`,
+      {
+        amount: String(amount),
+        currency: 'ZMW',
+        externalId: userId,           // your internal reference
+        payer: {
+          partyIdType: 'MSISDN',
+          partyId: phone.replace(/\D/g, '') // digits only e.g. 260971234567
+        },
+        payerMessage: 'Marble POS — Pro Plan subscription',
+        payeeNote:    `Upgrade to ${plan || 'pro'} plan`
+      },
+      {
+        headers: {
+          Authorization:               `Bearer ${token}`,
+          'X-Reference-Id':            referenceId,
+          'X-Target-Environment':      process.env.MTN_ENVIRONMENT,
+          'X-Callback-Url':            process.env.MTN_CALLBACK_URL,
+          'Ocp-Apim-Subscription-Key': process.env.MTN_SUBSCRIPTION_KEY,
+          'Content-Type':              'application/json'
+        }
+      }
+    );
+
+    // Store referenceId so /mtn-callback or /mtn-status can verify it
+    console.log(`MTN MoMo initiated: referenceId=${referenceId} phone=${phone} amount=K${amount}`);
+    res.json({ referenceId, message: 'Payment prompt sent — check your phone' });
+
+  } catch (err) {
+    const detail = err.response?.data || err.message;
+    console.error('MTN initiate error:', detail);
+    res.status(500).json({ error: 'Failed to initiate MTN payment', detail });
+  }
+});
+
+
+// =============================================================================
+// GET /mtn-status/:referenceId
+// Polls MTN for the payment status of a given referenceId
+// =============================================================================
+app.get('/mtn-status/:referenceId', async (req, res) => {
+  const { referenceId } = req.params;
+
+  try {
+    const token = await getMtnToken();
+
+    const { data } = await axios.get(
+      `${process.env.MTN_BASE_URL}/collection/v1_0/requesttopay/${referenceId}`,
+      {
+        headers: {
+          Authorization:               `Bearer ${token}`,
+          'X-Target-Environment':      process.env.MTN_ENVIRONMENT,
+          'Ocp-Apim-Subscription-Key': process.env.MTN_SUBSCRIPTION_KEY
+        }
+      }
+    );
+
+    // data.status: PENDING | SUCCESSFUL | FAILED
+    res.json({ status: data.status, data });
+
+  } catch (err) {
+    const detail = err.response?.data || err.message;
+    console.error('MTN status error:', detail);
+    res.status(500).json({ error: 'Failed to check MTN payment status', detail });
+  }
+});
+
+
+// =============================================================================
+// POST /mtn-callback
+// MTN calls this URL automatically when payment is approved or fails
+// (set MTN_CALLBACK_URL in .env to your deployed backend URL + /mtn-callback)
+// =============================================================================
+app.post('/mtn-callback', async (req, res) => {
+  const { externalId, status, financialTransactionId } = req.body;
+
+  console.log('MTN callback received:', req.body);
+
+  if (status === 'SUCCESSFUL' && externalId) {
+    // externalId = userId we passed in /mtn-initiate
+    const { error } = await supabase
+      .from('profiles')
+      .update({ plan: 'pro' })
+      .eq('id', externalId);
+
+    if (error) console.error('Supabase update failed:', error.message);
+    else console.log(`✓ MTN callback — plan=pro for user ${externalId} (txn: ${financialTransactionId})`);
+  }
+
+  res.sendStatus(200); // always 200 so MTN doesn't retry
+});
+
+
+// =============================================================================
+// POST /create-checkout-session  (Stripe card payments)
 // Body: { userId, email, plan }
-// Returns: { url }  — Stripe-hosted checkout page
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
 app.post('/create-checkout-session', async (req, res) => {
   const { userId, email, plan = 'pro' } = req.body;
   if (!userId || !email) return res.status(400).json({ error: 'userId and email required' });
@@ -39,10 +181,10 @@ app.post('/create-checkout-session', async (req, res) => {
       payment_method_types: ['card'],
       mode: 'subscription',
       customer_email: email,
-      metadata: { userId, plan },          // passed through to webhook
+      metadata: { userId, plan },
       line_items: [{
         price_data: {
-          currency: 'zmw',                 // Zambian Kwacha — change to 'usd' if needed
+          currency: 'zmw',
           product_data: { name: p.name },
           recurring: { interval: p.interval },
           unit_amount: p.amount
@@ -60,9 +202,10 @@ app.post('/create-checkout-session', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /webhook  (Stripe calls this — raw body required)
-// ─────────────────────────────────────────────────────────────────────────────
+
+// =============================================================================
+// POST /webhook  (Stripe calls this after card payment — raw body required)
+// =============================================================================
 async function handleStripeWebhook(req, res) {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -77,69 +220,32 @@ async function handleStripeWebhook(req, res) {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const { userId, plan } = session.metadata || {};
-
     if (userId && plan) {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ plan })
-        .eq('id', userId);
-
+      const { error } = await supabase.from('profiles').update({ plan }).eq('id', userId);
       if (error) console.error('Supabase update failed:', error.message);
-      else console.log(`✓ Plan upgraded to "${plan}" for user ${userId}`);
+      else console.log(`✓ Stripe webhook — plan="${plan}" for user ${userId}`);
     }
   }
 
   if (event.type === 'customer.subscription.deleted') {
-    // Subscription cancelled — downgrade back to free
-    const customerId = event.data.object.customer;
-    // Look up userId via customer email if needed
-    console.log('Subscription cancelled for Stripe customer:', customerId);
-    // TODO: map customerId → userId and set plan = 'free'
+    // Downgrade to free when subscription is cancelled
+    const email = event.data.object.customer_email;
+    if (email) {
+      // Look up user by email via auth.users (service role required)
+      const { data: users } = await supabase.auth.admin.listUsers();
+      const user = users?.users?.find(u => u.email === email);
+      if (user) {
+        await supabase.from('profiles').update({ plan: 'free' }).eq('id', user.id);
+        console.log(`✓ Subscription cancelled — plan=free for ${email}`);
+      }
+    }
   }
 
   res.sendStatus(200);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /mtn-initiate   (stub — replace with real MTN MoMo API call)
-// Body: { userId, phone, amount, plan }
-// ─────────────────────────────────────────────────────────────────────────────
-app.post('/mtn-initiate', async (req, res) => {
-  const { userId, phone, amount, plan } = req.body;
-  if (!userId || !phone) return res.status(400).json({ error: 'userId and phone required' });
 
-  // ── TODO: call MTN MoMo Collections API here ──────────────────────────────
-  // const mtn = require('./mtn');
-  // const result = await mtn.requestToPay({ phone, amount, externalId: userId });
-  // Store result.referenceId so you can poll/verify later
-  // ─────────────────────────────────────────────────────────────────────────
-
-  // Simulated success for now
-  console.log(`MTN MoMo payment initiated: ${phone} → K${amount} (plan: ${plan})`);
-  res.json({ status: 'pending', message: 'Check your phone for the MoMo prompt' });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /mtn-confirm   (called after user confirms on phone — or via MTN callback)
-// Body: { userId, referenceId, plan }
-// ─────────────────────────────────────────────────────────────────────────────
-app.post('/mtn-confirm', async (req, res) => {
-  const { userId, plan } = req.body;
-
-  // ── TODO: verify payment status with MTN API before trusting ─────────────
-  // const mtn = require('./mtn');
-  // const status = await mtn.getPaymentStatus(referenceId);
-  // if (status !== 'SUCCESSFUL') return res.status(402).json({ error: 'Payment not confirmed' });
-  // ─────────────────────────────────────────────────────────────────────────
-
-  const { error } = await supabase.from('profiles').update({ plan }).eq('id', userId);
-  if (error) return res.status(500).json({ error: error.message });
-
-  console.log(`✓ MTN MoMo confirmed — plan "${plan}" for user ${userId}`);
-  res.json({ success: true });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
 app.listen(process.env.PORT || 3000, () =>
   console.log(`Marble POS backend running on port ${process.env.PORT || 3000}`)
 );

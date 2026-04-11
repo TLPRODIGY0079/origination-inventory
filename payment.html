@@ -245,28 +245,33 @@ async function processPayment(method){
       window.location.href=url; // → Stripe hosted page
 
     }else{
-      // ── MTN / Airtel: call backend stub ──────────────────────────────────
+      // ── MTN / Airtel: real MTN MoMo Collections API ───────────────────────────
       const phone=method==='mtn'
         ?document.getElementById('mtnNumber').value.trim()
         :document.getElementById('airtelNumber').value.trim();
 
-      const res=await fetch(`${BACKEND}/mtn-initiate`,{
+      // 1. Initiate payment — sends prompt to user's phone
+      const initRes=await fetch(`${BACKEND}/mtn-initiate`,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({userId:signupData.userId,phone,amount:299,plan:'pro'})
       });
-      if(!res.ok) throw new Error((await res.json()).error||'Server error');
+      if(!initRes.ok) throw new Error((await initRes.json()).error||'Failed to initiate payment');
+      const{referenceId}=await initRes.json();
 
-      // Poll for confirmation (simplified — replace with real callback)
+      // 2. Poll /mtn-status every 4 seconds for up to 2 minutes
       disableBtns('Waiting for PIN confirmation...');
-      await new Promise(r=>setTimeout(r,5000)); // wait 5s for user to confirm on phone
-
-      const confirm=await fetch(`${BACKEND}/mtn-confirm`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({userId:signupData.userId,plan:'pro'})
-      });
-      if(!confirm.ok) throw new Error('Payment not confirmed — please try again');
+      let confirmed=false;
+      for(let i=0;i<30;i++){
+        await new Promise(r=>setTimeout(r,4000));
+        const statusRes=await fetch(`${BACKEND}/mtn-status/${referenceId}`);
+        if(!statusRes.ok) continue;
+        const{status}=await statusRes.json();
+        if(status==='SUCCESSFUL'){confirmed=true;break;}
+        if(status==='FAILED') throw new Error('Payment was declined on your phone');
+        // status==='PENDING' → keep polling
+      }
+      if(!confirmed) throw new Error('Payment timed out — please try again');
 
       document.getElementById('paymentForm').style.display='none';
       document.getElementById('successScreen').style.display='block';
