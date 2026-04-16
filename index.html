@@ -5,6 +5,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#007AFF">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script defer src="https://vercel.com/insights/script.js"></script>
 <script src="supabase.js"></script>
 <script>
@@ -215,8 +216,15 @@ tr:hover td{background:var(--bg)}
   .pos-cart{max-height:50vh}
   .stats-grid{grid-template-columns:repeat(2,1fr)}
   .form-row{grid-template-columns:1fr}
-  .product-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  .product-grid{grid-template-columns:repeat(2,1fr)}
+  .btn-primary,.btn-success{width:100%;min-height:48px}
+  #lowStockBanner{margin:8px 16px 0}
+  #stickyCheckoutBar{display:flex}
+  .dash-charts{grid-template-columns:1fr !important}
 }
+#stickyCheckoutBar{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--bd);padding:12px 16px;align-items:center;justify-content:space-between;gap:12px;z-index:200;box-shadow:0 -4px 16px rgba(0,0,0,.1)}
+#stickyCheckoutBar .sticky-total{font-size:18px;font-weight:800}
+#stickyCheckoutBar .sticky-total span{font-size:12px;color:var(--tx2);font-weight:500;display:block}
 @media(max-width:480px){
   .stats-grid{grid-template-columns:1fr}
   .login-card{padding:32px 24px}
@@ -268,6 +276,7 @@ tr:hover td{background:var(--bg)}
     <div class="content" id="mainContent"></div>
   </div>
 </div>
+<div id="stickyCheckoutBar"><div class="sticky-total"><span>Cart Total</span><span id="stickyTotal">K0.00</span></div><button class="btn btn-success" onclick="openCheckoutModal()" style="min-width:140px"><i class="fas fa-check"></i> Checkout</button></div>
 
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal" id="modalBox">
@@ -577,7 +586,7 @@ async function signInWithRealAuth(email,password){
   const user=userData.user;
   const{data:profile,error:profileError}=await supabaseClient.from('profiles').select('*').eq('id',user.id).single();
   if(profileError||!profile){console.error(profileError);return{ok:false,error:profileError||new Error('Profile not found')}}
-  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,plan:profile.plan||'free',onboarding_completed:profile.onboarding_completed??true,active:true};
+  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,plan:profile.plan||'free',onboarding_completed:profile.onboarding_completed??true,active:true,business_id:profile.business_id||null};
   return{ok:true,user:currentUser};
 }
 
@@ -589,7 +598,7 @@ async function restoreSession(){
   const user=userData.user;
   const{data:profile,error:profileError}=await supabaseClient.from('profiles').select('*').eq('id',user.id).single();
   if(profileError||!profile)return false;
-  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,plan:profile.plan||'free',onboarding_completed:profile.onboarding_completed??true,active:true};
+  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,plan:profile.plan||'free',onboarding_completed:profile.onboarding_completed??true,active:true,business_id:profile.business_id||null};
   $('loginScreen').classList.add('hidden');
   $('appShell').classList.add('active');
   renderSidebar();
@@ -682,7 +691,8 @@ const PAGES=[
   {id:'history',label:'Sales History',icon:'fa-receipt',roles:['admin','manager','cashier']},
   {id:'suppliers',label:'Suppliers',icon:'fa-truck',roles:['admin','manager']},
   {id:'reports',label:'Reports',icon:'fa-chart-bar',roles:['admin','manager'],roleMin:'manager'},
-  {id:'users',label:'Users',icon:'fa-user-shield',roles:['admin'],roleAllow:'admin'}
+  {id:'users',label:'Users',icon:'fa-user-shield',roles:['admin'],roleAllow:'admin'},
+  {id:'staff',label:'Staff',icon:'fa-users',roles:['admin'],roleAllow:'admin'}
 ];
 
 function renderSidebar(){
@@ -716,16 +726,27 @@ function applyRoleGuards(role){
   // data-role-min: hide element unless user's level >= required level
   document.querySelectorAll('[data-role-min]').forEach(el=>{
     const required=ROLE_LEVELS[el.dataset.roleMin]??0;
-    el.style.display=level>=required?'':'none';
+    if(level>=required){
+      // restore original display if we previously hid it
+      if(el.dataset.origDisplay!==undefined){el.style.display=el.dataset.origDisplay;delete el.dataset.origDisplay}
+      else if(el.style.display==='none') el.style.display='';
+    }else{
+      if(el.style.display!=='none'){el.dataset.origDisplay=el.style.display;el.style.display='none'}
+    }
   });
 
   // data-role-allow: hide element unless user's role is in the allowed list
   document.querySelectorAll('[data-role-allow]').forEach(el=>{
     const allowed=el.dataset.roleAllow.split(',').map(r=>r.trim());
-    el.style.display=allowed.includes(role)?'':'none';
+    if(allowed.includes(role)){
+      if(el.dataset.origDisplay!==undefined){el.style.display=el.dataset.origDisplay;delete el.dataset.origDisplay}
+      else if(el.style.display==='none') el.style.display='';
+    }else{
+      if(el.style.display!=='none'){el.dataset.origDisplay=el.style.display;el.style.display='none'}
+    }
   });
 
-  // data-role-write: disable element for viewer (read-only)
+  // data-role-write: disable write buttons for viewer (read-only role)
   document.querySelectorAll('[data-role-write]').forEach(el=>{
     el.disabled=level<1; // viewer=0 gets disabled
   });
@@ -739,7 +760,7 @@ function navigate(page){
   $('pageTitle').textContent=pg?pg.label:'';
   renderTopbarActions();
   $('mainContent').innerHTML='';
-  const renderers={dashboard:renderDashboard,products:renderProducts,inventory:renderInventory,sales:renderSales,history:renderHistory,suppliers:renderSuppliers,reports:renderReports,users:renderUsers};
+  const renderers={dashboard:renderDashboard,products:renderProducts,inventory:renderInventory,sales:renderSales,history:renderHistory,suppliers:renderSuppliers,reports:renderReports,users:renderUsers,staff:renderStaffManager};
   if(renderers[page])renderers[page]();
   if(currentUser)applyRoleGuards(currentUser.role);
 }
@@ -756,30 +777,126 @@ function variantLabel(v){return Object.values(v.attrs||{}).join(' / ')||'Standar
 function nextReceipt(){const n=DB.sales.length+1;return 'SV-'+String(n).padStart(4,'0')}
 function unitLabel(p){return p.unit||'pcs'}
 
-function renderDashboard(){
-  const todaySales=DB.sales.filter(s=>s.dateStr===today());
-  const todayRevenue=todaySales.reduce((s,sl)=>s+sl.totalAmount,0);
-  const totalProducts=DB.products.length;
-  const lowStock=DB.products.filter(p=>getTotalStock(p.id)<=p.reorder).length;
-  const totalVariants=DB.variants.length;
-  $('mainContent').innerHTML=`<div class="fade-in"><div class="stats-grid"><div class="stat-card"><div class="stat-icon blue"><i class="fas fa-coins"></i></div><div class="stat-value">${money(todayRevenue)}</div><div class="stat-label">Today's Revenue (${todaySales.length} sales)</div></div><div class="stat-card"><div class="stat-icon green"><i class="fas fa-boxes-stacked"></i></div><div class="stat-value">${totalProducts}</div><div class="stat-label">Products (${totalVariants} variants)</div></div><div class="stat-card"><div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div><div class="stat-value">${lowStock}</div><div class="stat-label">Low Stock Alerts</div></div><div class="stat-card"><div class="stat-icon red"><i class="fas fa-chart-line"></i></div><div class="stat-value">${DB.sales.length}</div><div class="stat-label">Total Sales All Time</div></div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-bottom:20px"><div class="card"><div class="card-header"><h3>📅 Weekly Revenue</h3></div><div class="card-body"><div class="stat-value" id="weeklyRevenue">K0.00</div></div></div><div class="card"><div class="card-header"><h3>🔥 Top Products</h3></div><div class="card-body" id="topProducts"></div></div><div class="card"><div class="card-header"><h3>👨‍💼 Cashier Stats</h3></div><div class="card-body" id="cashierStats"></div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px"><div class="card" style="grid-column:${lowStock?'1':'1/-1'}"><div class="card-header"><h3>Recent Sales</h3></div><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Customer</th><th>Amount</th><th>Cashier</th><th>Time</th><th data-role-allow="admin"></th></tr></thead><tbody>${DB.sales.slice(-8).reverse().map(s=>`<tr><td><span class="badge badge-blue">${s.receiptNo}</span></td><td>${s.customerName}</td><td style="font-weight:700">${money(s.totalAmount)}</td><td>${s.cashierName}</td><td>${new Date(s.date).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})}</td><td data-role-allow="admin"><button class="btn btn-ghost btn-sm" style="color:var(--dn)" onclick="deleteSale('${s.id}')"><i class="fas fa-trash"></i></button></td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--tx3);padding:30px">No sales yet</td></tr>'}</tbody></table></div></div></div>${lowStock?`<div class="card"><div class="card-header"><h3><i class="fas fa-triangle-exclamation" style="color:var(--wn);margin-right:8px"></i>Low Stock</h3></div><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Product</th><th>Stock</th><th>Reorder</th></tr></thead><tbody>${DB.products.filter(p=>getTotalStock(p.id)<=p.reorder).map(p=>`<tr><td style="font-weight:600">${p.name}</td><td><span class="badge ${getTotalStock(p.id)===0?'badge-red':'badge-orange'}">${getTotalStock(p.id)} ${unitLabel(p)}</span></td><td>${p.reorder}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}</div></div>`;
-  renderAnalytics();
+// ── Dashboard data helpers ───────────────────────────────────────────────────
+
+function _getWeekBounds() {
+  const now = new Date();
+  const day = now.getDay();
+  const diffToMon = (day === 0 ? -6 : 1 - day);
+  const mon = new Date(now);
+  mon.setDate(now.getDate() + diffToMon);
+  mon.setHours(0,0,0,0);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  sun.setHours(23,59,59,999);
+  const monStr = mon.toISOString().slice(0,10);
+  const sunStr = sun.toISOString().slice(0,10);
+  return { mon, sun, monStr, sunStr };
 }
 
-function renderAnalytics(){
-  if(!DB.sales.length)return;
-  const weekAgo=new Date();weekAgo.setDate(weekAgo.getDate()-7);
-  let weeklyRevenue=0;
-  DB.sales.forEach(s=>{if(new Date(s.date)>=weekAgo)weeklyRevenue+=Number(s.totalAmount||0)});
-  const wrEl=$('weeklyRevenue');if(wrEl)wrEl.textContent='K'+weeklyRevenue.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const productMap={};
-  DB.saleItems.forEach(i=>{const n=i.productName;productMap[n]=(productMap[n]||0)+Number(i.qty||0)});
-  const topHTML=Object.entries(productMap).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,q])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>${n}</span><strong>${q}</strong></div>`).join('');
-  const tpEl=$('topProducts');if(tpEl)tpEl.innerHTML=topHTML||'<p style="color:var(--tx3);font-size:13px">No sales yet</p>';
-  const cashierMap={};
-  DB.sales.forEach(s=>{const n=s.cashierName;cashierMap[n]=(cashierMap[n]||0)+Number(s.totalAmount||0)});
-  const cashHTML=Object.entries(cashierMap).sort((a,b)=>b[1]-a[1]).map(([n,t])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>${n}</span><strong>${money(t)}</strong></div>`).join('');
-  const csEl=$('cashierStats');if(csEl)csEl.innerHTML=cashHTML||'<p style="color:var(--tx3);font-size:13px">No sales yet</p>';
+async function getKPIs() {
+  const todayStr = new Date().toISOString().slice(0,10);
+  const { monStr, sunStr } = _getWeekBounds();
+  const bizId = currentUser && currentUser.business_id;
+  let todayQ = supabaseClient.from('sales').select('total_amount').eq('date_str', todayStr);
+  let weekQ  = supabaseClient.from('sales').select('total_amount').gte('date_str', monStr).lte('date_str', sunStr);
+  let stockQ = supabaseClient.from('variants').select('id', { count: 'exact', head: true }).lt('qty', 10);
+  if (bizId) { todayQ = todayQ.eq('business_id', bizId); weekQ = weekQ.eq('business_id', bizId); stockQ = stockQ.eq('business_id', bizId); }
+  const [todayRes, weekRes, stockRes] = await Promise.all([todayQ, weekQ, stockQ]);
+  const todaySales = (todayRes.data || []).reduce((s, r) => s + Number(r.total_amount || 0), 0);
+  const weekSales  = (weekRes.data  || []).reduce((s, r) => s + Number(r.total_amount || 0), 0);
+  const lowStockCount = stockRes.count || 0;
+  return { todaySales, weekSales, lowStockCount };
+}
+
+async function getWeeklyRevenue() {
+  const { monStr, sunStr } = _getWeekBounds();
+  const bizId = currentUser && currentUser.business_id;
+  let q = supabaseClient.from('sales').select('date_str, total_amount').gte('date_str', monStr).lte('date_str', sunStr);
+  if (bizId) q = q.eq('business_id', bizId);
+  const { data } = await q;
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const totals = Array(7).fill(0);
+  (data || []).forEach(row => {
+    const d = new Date(row.date_str + 'T00:00:00');
+    const idx = (d.getDay() + 6) % 7;
+    totals[idx] += Number(row.total_amount || 0);
+  });
+  return days.map((day, i) => ({ day, total: totals[i] }));
+}
+
+async function getTopProducts() {
+  const { data } = await supabaseClient.from('sale_items').select('product_name, qty');
+  const map = {};
+  (data || []).forEach(i => { map[i.product_name] = (map[i.product_name] || 0) + Number(i.qty || 0); });
+  return Object.entries(map).map(([product_name, total_qty]) => ({ product_name, total_qty })).sort((a, b) => b.total_qty - a.total_qty).slice(0, 5);
+}
+
+async function getLeaderboard() {
+  const bizId = currentUser && currentUser.business_id;
+  let q = supabaseClient.from('sales').select('cashier_name, total_amount');
+  if (bizId) q = q.eq('business_id', bizId);
+  const { data } = await q;
+  const map = {};
+  (data || []).forEach(s => { map[s.cashier_name] = (map[s.cashier_name] || 0) + Number(s.total_amount || 0); });
+  return Object.entries(map).map(([cashier_name, total_amount]) => ({ cashier_name, total_amount })).sort((a, b) => b.total_amount - a.total_amount);
+}
+
+let _revenueChart = null;
+function renderRevenueChart(weekData) {
+  if (_revenueChart) { _revenueChart.destroy(); _revenueChart = null; }
+  const canvas = document.getElementById('revenueChart');
+  if (!canvas) return;
+  const acColor = getComputedStyle(document.documentElement).getPropertyValue('--ac').trim() || '#007AFF';
+  _revenueChart = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: weekData.map(d => d.day), datasets: [{ label: 'Revenue (K)', data: weekData.map(d => d.total), backgroundColor: acColor, borderRadius: 6 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: v => 'K'+v } } } }
+  });
+}
+
+async function renderDashboard() {
+  $('mainContent').innerHTML = `<div class="fade-in">
+    <div id="lowStockBanner" style="display:none;background:var(--wn2);border:1px solid var(--wn);border-radius:var(--rs);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--wn);font-weight:600"></div>
+    <div class="stats-grid" id="kpiCards">
+      <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-arrow-trend-up"></i></div><div class="stat-value" id="kpiToday">K0.00</div><div class="stat-label">Today's Sales</div></div>
+      <div class="stat-card"><div class="stat-icon green"><i class="fas fa-calendar-week"></i></div><div class="stat-value" id="kpiWeek">K0.00</div><div class="stat-label">This Week's Sales</div></div>
+      <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div><div class="stat-value" id="kpiLowStock">0</div><div class="stat-label">Low Stock Items</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px" class="dash-charts">
+      <div class="card"><div class="card-header"><h3>Weekly Revenue</h3></div><div class="card-body"><canvas id="revenueChart" height="180"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3>Top Products</h3></div><div class="card-body np"><table style="width:100%;font-size:13px"><thead><tr><th style="padding:10px 16px">Product</th><th style="padding:10px 16px;text-align:right">Qty Sold</th></tr></thead><tbody id="topProductsBody"></tbody></table></div></div>
+    </div>
+    <div class="card"><div class="card-header"><h3>Cashier Leaderboard</h3></div><div class="card-body np"><table style="width:100%;font-size:13px"><thead><tr><th style="padding:10px 16px">#</th><th style="padding:10px 16px">Cashier</th><th style="padding:10px 16px;text-align:right">Total Sales</th></tr></thead><tbody id="leaderboardBody"></tbody></table></div></div>
+  </div>`;
+
+  try {
+    const { todaySales, weekSales, lowStockCount } = await getKPIs();
+    $('kpiToday').textContent = money(todaySales);
+    $('kpiWeek').textContent = money(weekSales);
+    $('kpiLowStock').textContent = lowStockCount;
+  } catch(e) { console.error('KPI error', e); }
+
+  try {
+    const weekData = await getWeeklyRevenue();
+    renderRevenueChart(weekData);
+  } catch(e) { console.error('Chart error', e); }
+
+  try {
+    const tops = await getTopProducts();
+    const tbody = $('topProductsBody');
+    if (tbody) tbody.innerHTML = tops.length
+      ? tops.map(t => `<tr><td style="padding:10px 16px;font-weight:600">${t.product_name}</td><td style="padding:10px 16px;text-align:right">${t.total_qty}</td></tr>`).join('')
+      : `<tr><td colspan="2" style="padding:20px;text-align:center;color:var(--tx3)">No sales yet</td></tr>`;
+  } catch(e) { console.error('Top products error', e); }
+
+  try {
+    const board = await getLeaderboard();
+    const tbody = $('leaderboardBody');
+    if (tbody) tbody.innerHTML = board.length
+      ? board.map((b, i) => `<tr><td style="padding:10px 16px;color:var(--tx3);font-weight:700">${i+1}</td><td style="padding:10px 16px;font-weight:600">${b.cashier_name}</td><td style="padding:10px 16px;text-align:right;font-weight:700">${money(b.total_amount)}</td></tr>`).join('')
+      : `<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--tx3)">No sales yet</td></tr>`;
+  } catch(e) { console.error('Leaderboard error', e); }
 }
 
 async function deleteSale(saleId){
@@ -929,6 +1046,7 @@ function renderCart(){
   if($('cartDiscount'))$('cartDiscount').textContent=money(0);
   if($('cartTotal'))$('cartTotal').textContent=money(subtotal);
   if($('cartCount'))$('cartCount').textContent=cart.length;
+  const _stickyTotal=document.getElementById('stickyTotal');if(_stickyTotal)_stickyTotal.textContent=money(cart.reduce((s,ci)=>s+ci.price*ci.qty,0));
 }
 function openCheckoutModal(){
   if(cart.length===0)return;
@@ -1013,10 +1131,13 @@ function showReceipt(sale){
 }
 
 function renderHistory(){
+  renderTopbarActions('<button class="btn btn-outline btn-sm" id="exportExcelBtn" data-role-min="manager"><i class="fas fa-file-excel"></i> Excel</button><button class="btn btn-outline btn-sm" id="exportPdfBtn" data-role-min="manager" style="margin-left:6px"><i class="fas fa-file-pdf"></i> PDF</button>');
   $('mainContent').innerHTML=`<div class="fade-in"><div class="search-bar"><div class="form-group" style="margin:0"><label style="font-size:11px;margin-bottom:4px">Date</label><input type="date" class="form-input" id="histDate" value="${today()}" style="padding:8px 12px"></div><div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" id="histSearch" placeholder="Search by receipt or customer..."></div></div><div id="histStats" style="margin-bottom:16px"></div><div class="card"><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Time</th><th>Customer</th><th>Items</th><th>Amount</th><th>Payment</th><th>Cashier</th><th></th></tr></thead><tbody id="histBody"></tbody></table></div></div></div></div>`;
   renderHistTable();
   $('histDate').addEventListener('change',renderHistTable);
   $('histSearch').addEventListener('input',renderHistTable);
+  const _getHistSales=()=>{const date=$('histDate')?$('histDate').value:today();const q=($('histSearch')?$('histSearch').value:'').toLowerCase();return DB.sales.filter(s=>s.dateStr===date&&(!q||s.receiptNo.toLowerCase().includes(q)||s.customerName.toLowerCase().includes(q))).map(s=>({receipt_no:s.receiptNo,date_str:s.dateStr,cashier_name:s.cashierName,customer_name:s.customerName,items:s.items,total_amount:s.totalAmount,payment_method:s.paymentMethod}));};
+  setTimeout(()=>{if($('exportExcelBtn'))$('exportExcelBtn').addEventListener('click',()=>exportToExcel(_getHistSales()));if($('exportPdfBtn'))$('exportPdfBtn').addEventListener('click',()=>exportToPDF(_getHistSales()));if(currentUser)applyRoleGuards(currentUser.role);},50);
 }
 function renderHistTable(){
   const date=$('histDate')?$('histDate').value:today();
@@ -1133,6 +1254,212 @@ function renderHistTable(){
     },50);
   }
 
+  // ── Backend URL ──────────────────────────────────────────────────────────
+  const BACKEND = 'http://localhost:3000'; // change to deployed URL in production
+
+  // ── Staff Manager ────────────────────────────────────────────────────────
+  async function loadStaffList() {
+    if (!currentUser || !currentUser.business_id) return [];
+    const { data, error } = await supabaseClient
+      .from('profiles')
+      .select('id, full_name, role, plan')
+      .eq('business_id', currentUser.business_id);
+    if (error) { console.error('loadStaffList error:', error); return []; }
+    return data || [];
+  }
+
+  async function inviteStaff(email, role) {
+    if (!email || !email.trim()) { toast('Email is required', 'error'); return false; }
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      const res = await fetch(`${BACKEND}/invite-staff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ email: email.trim(), role, business_id: currentUser.business_id })
+      });
+      const json = await res.json();
+      if (res.status === 409) { toast('This email is already registered', 'error'); return false; }
+      if (!res.ok) { toast(json.error || 'Failed to invite staff', 'error'); return false; }
+      toast(`Invitation sent to ${email}`, 'success');
+      return true;
+    } catch (err) {
+      console.error('inviteStaff error:', err);
+      toast('Network error — could not invite staff', 'error');
+      return false;
+    }
+  }
+
+  async function updateStaffRole(userId, role) {
+    const { error } = await supabaseClient.from('profiles').update({ role }).eq('id', userId);
+    if (error) { console.error('updateStaffRole error:', error); toast('Failed to update role', 'error'); return; }
+    toast('Role updated', 'success');
+  }
+
+  async function renderStaffManager() {
+    if (!currentUser || currentUser.role !== 'admin') {
+      $('mainContent').innerHTML = `<div class="empty-state"><i class="fas fa-lock"></i><h3>Access Denied</h3><p>Only admins can manage staff.</p></div>`;
+      return;
+    }
+    $('mainContent').innerHTML = `<div class="fade-in"><div class="card" style="margin-bottom:20px"><div class="card-header"><h3><i class="fas fa-user-plus" style="margin-right:8px;color:var(--ac)"></i>Invite Staff Member</h3></div><div class="card-body"><div class="form-row"><div class="form-group"><label>Email Address</label><input class="form-input" id="inviteEmail" type="email" placeholder="staff@example.com"></div><div class="form-group"><label>Role</label><select class="form-input" id="inviteRole"><option value="manager">Manager</option><option value="cashier">Cashier</option><option value="viewer">Viewer</option></select></div></div><button class="btn btn-primary btn-sm" id="inviteBtn" style="margin-top:4px"><i class="fas fa-paper-plane"></i> Send Invitation</button><div id="inviteError" style="color:var(--dn);font-size:13px;margin-top:8px;display:none"></div></div></div><div class="card"><div class="card-header"><h3><i class="fas fa-users" style="margin-right:8px;color:var(--ac)"></i>Staff Members</h3></div><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email / ID</th><th>Role</th><th>Status</th></tr></thead><tbody id="staffTableBody"><tr><td colspan="4" style="text-align:center;padding:30px;color:var(--tx3)"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr></tbody></table></div></div></div></div>`;
+
+    // Wire invite form
+    $('inviteBtn').addEventListener('click', async () => {
+      const email = $('inviteEmail').value.trim();
+      const role = $('inviteRole').value;
+      const errEl = $('inviteError');
+      errEl.style.display = 'none';
+      if (!email) { errEl.textContent = 'Email is required'; errEl.style.display = 'block'; return; }
+      $('inviteBtn').disabled = true;
+      $('inviteBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+      const ok = await inviteStaff(email, role);
+      $('inviteBtn').disabled = false;
+      $('inviteBtn').innerHTML = '<i class="fas fa-paper-plane"></i> Send Invitation';
+      if (ok) {
+        $('inviteEmail').value = '';
+        await refreshStaffTable();
+      }
+    });
+
+    await refreshStaffTable();
+  }
+
+  async function refreshStaffTable() {
+    const staff = await loadStaffList();
+    const tbody = $('staffTableBody');
+    if (!tbody) return;
+    if (!staff.length) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--tx3)">No staff members found</td></tr>`;
+      return;
+    }
+    const roleOptions = ['admin','manager','cashier','viewer'].map(r => `<option value="${r}">${r.charAt(0).toUpperCase()+r.slice(1)}</option>`).join('');
+    tbody.innerHTML = staff.map(s => `<tr>
+      <td style="font-weight:600">${s.full_name || '—'}</td>
+      <td style="font-size:12px;color:var(--tx2)">${s.id}</td>
+      <td><select class="filter-select" style="padding:6px 10px;font-size:13px" data-uid="${s.id}" onchange="updateStaffRole(this.dataset.uid,this.value)">${roleOptions.replace(`value="${s.role}"`,`value="${s.role}" selected`)}</select></td>
+      <td><span class="badge ${s.plan==='pro'?'badge-blue':'badge-gray'}">${s.plan||'free'}</span></td>
+    </tr>`).join('');
+  }
+
+// ── Export Service ───────────────────────────────────────────────────────────
+function exportToExcel(sales) {
+  if (!sales || sales.length === 0) { toast('No data to export', 'error'); return; }
+  const XLSX = window.XLSX;
+  if (!XLSX) { toast('Excel library not loaded', 'error'); return; }
+  const rows = sales.map(s => ({
+    'Receipt No':     s.receipt_no    || s.receiptNo    || '',
+    'Date':           s.date_str      || s.dateStr      || '',
+    'Cashier':        s.cashier_name  || s.cashierName  || '',
+    'Customer':       s.customer_name || s.customerName || '',
+    'Items':          s.items         || 0,
+    'Total Amount':   Number(s.total_amount || s.totalAmount || 0),
+    'Payment Method': s.payment_method|| s.paymentMethod|| ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sales');
+  XLSX.writeFile(wb, 'sales-export-' + today() + '.xlsx');
+}
+
+function exportToPDF(sales) {
+  if (!sales || sales.length === 0) { toast('No data to export', 'error'); return; }
+  if (!window.jspdf) { toast('PDF library not loaded', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const bizName = (currentUser && currentUser.name) ? currentUser.name : 'Marble POS';
+  const total = sales.reduce((s, r) => s + Number(r.total_amount || r.totalAmount || 0), 0);
+  doc.setFontSize(16); doc.setFont(undefined, 'bold');
+  doc.text(bizName, 14, 18);
+  doc.setFontSize(10); doc.setFont(undefined, 'normal');
+  doc.text('Sales Report — ' + today(), 14, 26);
+  doc.text('Total: K' + Number(total).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 14, 33);
+  const cols = ['Receipt No', 'Date', 'Cashier', 'Customer', 'Items', 'Total', 'Payment'];
+  const colW = [32, 26, 40, 40, 16, 34, 28];
+  let y = 44;
+  doc.setFillColor(0, 122, 255); doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont(undefined, 'bold');
+  let cx = 14;
+  cols.forEach((col, i) => { doc.rect(cx, y - 5, colW[i], 8, 'F'); doc.text(col, cx + 2, y); cx += colW[i]; });
+  doc.setTextColor(0, 0, 0); doc.setFont(undefined, 'normal'); y += 10;
+  sales.forEach((s, idx) => {
+    if (y > 185) { doc.addPage(); y = 20; }
+    if (idx % 2 === 0) { doc.setFillColor(242, 242, 247); let rx = 14; colW.forEach(w => { doc.rect(rx, y - 5, w, 8, 'F'); rx += w; }); }
+    const row = [
+      s.receipt_no || s.receiptNo || '', s.date_str || s.dateStr || '',
+      s.cashier_name || s.cashierName || '', s.customer_name || s.customerName || '',
+      String(s.items || 0),
+      'K' + Number(s.total_amount || s.totalAmount || 0).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      s.payment_method || s.paymentMethod || ''
+    ];
+    let rx = 14;
+    row.forEach((val, i) => { const t = String(val).length > 18 ? String(val).slice(0, 16) + '…' : String(val); doc.text(t, rx + 2, y); rx += colW[i]; });
+    y += 9;
+  });
+  doc.save('sales-report-' + today() + '.pdf');
+}
+// ── Low Stock Monitor ────────────────────────────────────────────────────────
+let _lowStockIntervalId = null;
+let _prevLowStockIds = new Set();
+
+function renderNotificationBanner(items) {
+  const banner = document.getElementById('lowStockBanner');
+  if (!banner) return;
+  if (!items || items.length === 0) {
+    banner.style.display = 'none';
+    banner.innerHTML = '';
+    return;
+  }
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const list = items.map(i => '<strong>' + esc(i.product_name) + '</strong> (' + i.qty + ' left)').join(' &nbsp;&middot;&nbsp; ');
+  banner.innerHTML = '<i class="fas fa-triangle-exclamation" style="margin-right:8px"></i>Low Stock: ' + list;
+  banner.style.display = 'block';
+}
+
+async function checkLowStock() {
+  try {
+    const bizId = currentUser && currentUser.business_id;
+    let q = supabaseClient.from('variants').select('id, product_id, qty').lt('qty', 10);
+    if (bizId) q = q.eq('business_id', bizId);
+    const { data, error } = await q;
+    if (error) throw error;
+    const items = (data || []).map(v => {
+      const p = getProduct(v.product_id);
+      return { id: v.id, product_name: p ? p.name : v.product_id, qty: v.qty };
+    });
+    renderNotificationBanner(items);
+    const currentIds = new Set(items.map(i => i.id));
+    const newItems = items.filter(i => !_prevLowStockIds.has(i.id));
+    _prevLowStockIds = currentIds;
+    if (newItems.length > 0) sendPushNotification(newItems);
+  } catch (err) {
+    console.error('Low stock check failed:', err);
+  }
+}
+
+function startLowStockMonitor() {
+  if (_lowStockIntervalId) return;
+  checkLowStock();
+  _lowStockIntervalId = setInterval(checkLowStock, 5000);
+}
+
+function stopLowStockMonitor() {
+  if (_lowStockIntervalId) { clearInterval(_lowStockIntervalId); _lowStockIntervalId = null; }
+}
+
+// ── Push Notifications ───────────────────────────────────────────────────────
+let _pushPermission = null; // 'granted' | 'denied' | 'default' | null
+
+function requestPushPermission() {
+  if (!('Notification' in window)) return;
+  if (_pushPermission !== null) return; // already asked this session
+  Notification.requestPermission().then(result => { _pushPermission = result; });
+}
+
+function sendPushNotification(items) {
+  if (!('Notification' in window)) return;
+  if (_pushPermission !== 'granted') return;
+  if (!items || items.length === 0) return;
+  const body = items.map(i => i.product_name + ' (' + i.qty + ' left)').join(', ');
+  new Notification('Low Stock Alert ⚠️', { body, icon: 'marble-logo.png' });
+}
   async function startApp(){
     // Register service worker for offline PWA support
     if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
@@ -1146,6 +1473,7 @@ function renderHistTable(){
     syncOfflineQueue();
     const restored=await restoreSession();
     if(restored){
+      if(['admin','manager'].includes(currentUser.role)) { startLowStockMonitor(); requestPushPermission(); }
       if(!currentUser.onboarding_completed) showOnboarding();
       return;
     }
@@ -1158,6 +1486,7 @@ function renderHistTable(){
         $('appShell').classList.add('active');
         renderSidebar();
         navigate('dashboard');
+        if(['admin','manager'].includes(currentUser.role)) { startLowStockMonitor(); requestPushPermission(); }
       }else{
         $('loginError').textContent='Invalid email or password';
         $('loginError').style.display='block';

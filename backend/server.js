@@ -246,6 +246,56 @@ async function handleStripeWebhook(req, res) {
 
 
 // =============================================================================
+// POST /invite-staff
+// Body: { email: string, role: string, business_id: string }
+// Invites a new staff member via Supabase auth and upserts their profile row
+// =============================================================================
+app.post('/invite-staff', async (req, res) => {
+  const { email, role, business_id } = req.body;
+
+  if (!email || !role || !business_id) {
+    return res.status(400).json({ error: 'email, role, and business_id are required' });
+  }
+
+  try {
+    // Invite user via Supabase auth admin API (requires service-role key)
+    const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email);
+
+    if (inviteError) {
+      // Supabase returns a specific error when the user already exists
+      if (inviteError.message && inviteError.message.toLowerCase().includes('already')) {
+        return res.status(409).json({ error: 'A user with this email already exists' });
+      }
+      console.error('Invite error:', inviteError);
+      return res.status(500).json({ error: inviteError.message });
+    }
+
+    const userId = inviteData?.user?.id;
+    if (!userId) {
+      return res.status(500).json({ error: 'Failed to retrieve invited user ID' });
+    }
+
+    // Upsert a profiles row with the given role and business_id
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert({ id: userId, role, business_id, plan: 'free', onboarding_completed: false });
+
+    if (profileError) {
+      console.error('Profile upsert error:', profileError);
+      return res.status(500).json({ error: profileError.message });
+    }
+
+    console.log(`✓ Staff invited: ${email} as ${role} for business ${business_id}`);
+    res.json({ ok: true });
+
+  } catch (err) {
+    console.error('Invite staff error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// =============================================================================
 app.listen(process.env.PORT || 3000, () =>
   console.log(`Marble POS backend running on port ${process.env.PORT || 3000}`)
 );
