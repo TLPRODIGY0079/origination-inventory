@@ -6,7 +6,7 @@ Incremental implementation across five areas: RLS policies, frontend role guards
 
 ## Tasks
 
-- [ ] 1. Apply Supabase RLS policies and helper functions
+- [x] 1. Apply Supabase RLS policies and helper functions
   - Create `get_my_role()` and `get_my_business_id()` SECURITY DEFINER functions in Supabase SQL editor
   - Add `business_id` column to `sales`, `products`, and `variants` tables if not present
   - Write and apply RLS policies for `sales` (SELECT all, INSERT admin+cashier, UPDATE admin, DELETE admin)
@@ -46,7 +46,7 @@ Incremental implementation across five areas: RLS policies, frontend role guards
     - **Validates: Requirements 2.6**
     - Call `applyRoleGuards(role)` twice with same role; assert DOM state is identical after both calls
 
-- [ ] 3. Add backend `/invite-staff` endpoint and Staff Manager UI
+- [~] 3. Add backend `/invite-staff` endpoint and Staff Manager UI
   - Add `POST /invite-staff` to `backend/server.js` that calls `supabase.auth.admin.inviteUserByEmail` and upserts a `profiles` row with the given role and `business_id`
   - Return 409 if email already exists, 400 for missing fields
   - Add "Staff" section to sidebar nav with `data-role-allow="admin"` attribute
@@ -66,10 +66,10 @@ Incremental implementation across five areas: RLS policies, frontend role guards
     - Test empty email returns validation error (edge case — Req 3.3)
     - Test duplicate email returns error message (edge case — Req 3.2)
 
-- [ ] 4. Checkpoint — Ensure all tests pass
+- [~] 4. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 5. Implement Dashboard KPI cards, Revenue Chart, Top Products, and Leaderboard
+- [~] 5. Implement Dashboard KPI cards, Revenue Chart, Top Products, and Leaderboard
   - Add Chart.js CDN script tag to `index.html` head
   - Implement `getKPIs()` — three parallel Supabase queries: today's sales sum, week's sales sum, low-stock count
   - Implement `getWeeklyRevenue()` — query sales for current Mon–Sun week, aggregate by `date_str` into array[7]
@@ -103,7 +103,7 @@ Incremental implementation across five areas: RLS policies, frontend role guards
   - [ ]* 5.5 Write unit test for chart canvas reuse prevention
     - Simulate two `renderDashboard()` calls; assert previous Chart.js instance is destroyed before new one is created (Req 5.5)
 
-- [ ] 6. Implement Export Service (Excel and PDF)
+- [~] 6. Implement Export Service (Excel and PDF)
   - Add SheetJS CDN script tag to `index.html` head
   - Add jsPDF CDN script tag to `index.html` head
   - Implement `exportToExcel(sales)` — build worksheet with columns: Receipt No, Date, Cashier, Customer, Items, Total Amount, Payment Method; trigger download as `sales-export-YYYY-MM-DD.xlsx`
@@ -127,10 +127,10 @@ Incremental implementation across five areas: RLS policies, frontend role guards
     - Empty sales array shows toast and skips download (Req 8.1, 9.1)
     - Filename format matches `sales-export-YYYY-MM-DD.xlsx` and `sales-report-YYYY-MM-DD.pdf` (Req 8.3, 9.4)
 
-- [ ] 7. Checkpoint — Ensure all tests pass
+- [~] 7. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8. Implement Low Stock Monitor and Notification Banner
+- [~] 8. Implement Low Stock Monitor and Notification Banner
   - Add a `#lowStockBanner` div to the top of `#mainContent` (hidden by default via `display:none`)
   - Implement `renderNotificationBanner(items)` — show banner with list of `{product_name, qty}` when items.length > 0, hide when empty
   - Implement `checkLowStock()` — query `variants` WHERE `qty < 10` AND `business_id` = currentUser.business_id; call `renderNotificationBanner`; compute diff vs previous poll; call `sendPushNotification` for new items; catch errors with `console.error`
@@ -147,7 +147,7 @@ Incremental implementation across five areas: RLS policies, frontend role guards
   - [ ]* 8.2 Write unit test for low-stock monitor error handling
     - Mock supabaseClient to throw; assert `console.error` is called and interval is not cleared (Req 10.5)
 
-- [ ] 9. Implement Browser Push Notifications for Low Stock
+- [~] 9. Implement Browser Push Notifications for Low Stock
   - Implement `requestPushPermission()` — call `Notification.requestPermission()` once on login for admin/manager; store result in a session variable
   - Implement `sendPushNotification(newItems)` — if permission is `granted` and `newItems.length > 0`, create `new Notification(...)` with title "Low Stock Alert" and body listing product names and quantities
   - Integrate `sendPushNotification` into `checkLowStock()` diff logic (only fire for items not present in previous poll)
@@ -164,7 +164,7 @@ Incremental implementation across five areas: RLS policies, frontend role guards
     - Permission granted, no new items: assert no notification sent (Req 11.2)
     - Notification API unavailable: assert no error thrown (Req 11.4)
 
-- [ ] 10. Implement Mobile UI Optimizations
+- [~] 10. Implement Mobile UI Optimizations
   - Update CSS media query `@media(max-width:768px)` in `index.html`:
     - Set `.stats-grid` to `grid-template-columns: repeat(2, 1fr)`
     - Set `.product-grid` to `grid-template-columns: repeat(2, 1fr)`
@@ -177,7 +177,7 @@ Incremental implementation across five areas: RLS policies, frontend role guards
   - Update cart total display in `#stickyCheckoutBar` whenever `renderCart()` is called
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
 
-- [ ] 11. Final Checkpoint — Ensure all tests pass
+- [~] 11. Final Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

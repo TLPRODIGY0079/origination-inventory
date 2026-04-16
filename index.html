@@ -681,14 +681,17 @@ const PAGES=[
   {id:'sales',label:'Sales / POS',icon:'fa-cash-register',roles:['admin','cashier']},
   {id:'history',label:'Sales History',icon:'fa-receipt',roles:['admin','manager','cashier']},
   {id:'suppliers',label:'Suppliers',icon:'fa-truck',roles:['admin','manager']},
-  {id:'reports',label:'Reports',icon:'fa-chart-bar',roles:['admin','manager']},
-  {id:'users',label:'Users',icon:'fa-user-shield',roles:['admin']}
+  {id:'reports',label:'Reports',icon:'fa-chart-bar',roles:['admin','manager'],roleMin:'manager'},
+  {id:'users',label:'Users',icon:'fa-user-shield',roles:['admin'],roleAllow:'admin'}
 ];
 
 function renderSidebar(){
   const pages=PAGES.filter(p=>p.roles.includes(currentUser.role));
   let html='<div class="nav-section">Main</div>';
-  pages.forEach(p=>{html+=`<div class="nav-item ${currentPage===p.id?'active':''}" data-page="${p.id}"><i class="fas ${p.icon}"></i>${p.label}</div>`});
+  pages.forEach(p=>{
+    const roleAttr=p.roleMin?` data-role-min="${p.roleMin}"`:p.roleAllow?` data-role-allow="${p.roleAllow}"`:''
+    html+=`<div class="nav-item ${currentPage===p.id?'active':''}" data-page="${p.id}"${roleAttr}><i class="fas ${p.icon}"></i>${p.label}</div>`
+  });
   $('sidebarNav').innerHTML=html;
   $('sidebarNav').querySelectorAll('.nav-item').forEach(el=>el.addEventListener('click',()=>{navigate(el.dataset.page);closeSidebar()}));
   const initials=currentUser.name.split(' ').map(w=>w[0]).join('').toUpperCase();
@@ -704,6 +707,30 @@ function renderTopbarActions(extra=''){
   updateConnBadge();
   $('themeToggleBtn').addEventListener('click',toggleTheme);
 }
+// ── Role Guard ───────────────────────────────────────────────────────────────
+const ROLE_LEVELS={viewer:0,cashier:1,manager:2,admin:3};
+
+function applyRoleGuards(role){
+  const level=ROLE_LEVELS[role]??-1;
+
+  // data-role-min: hide element unless user's level >= required level
+  document.querySelectorAll('[data-role-min]').forEach(el=>{
+    const required=ROLE_LEVELS[el.dataset.roleMin]??0;
+    el.style.display=level>=required?'':'none';
+  });
+
+  // data-role-allow: hide element unless user's role is in the allowed list
+  document.querySelectorAll('[data-role-allow]').forEach(el=>{
+    const allowed=el.dataset.roleAllow.split(',').map(r=>r.trim());
+    el.style.display=allowed.includes(role)?'':'none';
+  });
+
+  // data-role-write: disable element for viewer (read-only)
+  document.querySelectorAll('[data-role-write]').forEach(el=>{
+    el.disabled=level<1; // viewer=0 gets disabled
+  });
+}
+
 function navigate(page){
   if(!hasAccess(page)){toast('Access denied','error');return}
   currentPage=page;
@@ -714,6 +741,7 @@ function navigate(page){
   $('mainContent').innerHTML='';
   const renderers={dashboard:renderDashboard,products:renderProducts,inventory:renderInventory,sales:renderSales,history:renderHistory,suppliers:renderSuppliers,reports:renderReports,users:renderUsers};
   if(renderers[page])renderers[page]();
+  if(currentUser)applyRoleGuards(currentUser.role);
 }
 
 function getProduct(id){return DB.products.find(p=>p.id===id)}
@@ -734,7 +762,7 @@ function renderDashboard(){
   const totalProducts=DB.products.length;
   const lowStock=DB.products.filter(p=>getTotalStock(p.id)<=p.reorder).length;
   const totalVariants=DB.variants.length;
-  $('mainContent').innerHTML=`<div class="fade-in"><div class="stats-grid"><div class="stat-card"><div class="stat-icon blue"><i class="fas fa-coins"></i></div><div class="stat-value">${money(todayRevenue)}</div><div class="stat-label">Today's Revenue (${todaySales.length} sales)</div></div><div class="stat-card"><div class="stat-icon green"><i class="fas fa-boxes-stacked"></i></div><div class="stat-value">${totalProducts}</div><div class="stat-label">Products (${totalVariants} variants)</div></div><div class="stat-card"><div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div><div class="stat-value">${lowStock}</div><div class="stat-label">Low Stock Alerts</div></div><div class="stat-card"><div class="stat-icon red"><i class="fas fa-chart-line"></i></div><div class="stat-value">${DB.sales.length}</div><div class="stat-label">Total Sales All Time</div></div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-bottom:20px"><div class="card"><div class="card-header"><h3>📅 Weekly Revenue</h3></div><div class="card-body"><div class="stat-value" id="weeklyRevenue">K0.00</div></div></div><div class="card"><div class="card-header"><h3>🔥 Top Products</h3></div><div class="card-body" id="topProducts"></div></div><div class="card"><div class="card-header"><h3>👨‍💼 Cashier Stats</h3></div><div class="card-body" id="cashierStats"></div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px"><div class="card" style="grid-column:${lowStock?'1':'1/-1'}"><div class="card-header"><h3>Recent Sales</h3></div><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Customer</th><th>Amount</th><th>Cashier</th><th>Time</th>${currentUser?.role==='admin'?'<th></th>':''}</tr></thead><tbody>${DB.sales.slice(-8).reverse().map(s=>`<tr><td><span class="badge badge-blue">${s.receiptNo}</span></td><td>${s.customerName}</td><td style="font-weight:700">${money(s.totalAmount)}</td><td>${s.cashierName}</td><td>${new Date(s.date).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})}</td>${currentUser?.role==='admin'?`<td><button class="btn btn-ghost btn-sm" style="color:var(--dn)" onclick="deleteSale('${s.id}')"><i class="fas fa-trash"></i></button></td>`:''}</tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--tx3);padding:30px">No sales yet</td></tr>'}</tbody></table></div></div></div>${lowStock?`<div class="card"><div class="card-header"><h3><i class="fas fa-triangle-exclamation" style="color:var(--wn);margin-right:8px"></i>Low Stock</h3></div><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Product</th><th>Stock</th><th>Reorder</th></tr></thead><tbody>${DB.products.filter(p=>getTotalStock(p.id)<=p.reorder).map(p=>`<tr><td style="font-weight:600">${p.name}</td><td><span class="badge ${getTotalStock(p.id)===0?'badge-red':'badge-orange'}">${getTotalStock(p.id)} ${unitLabel(p)}</span></td><td>${p.reorder}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}</div></div>`;
+  $('mainContent').innerHTML=`<div class="fade-in"><div class="stats-grid"><div class="stat-card"><div class="stat-icon blue"><i class="fas fa-coins"></i></div><div class="stat-value">${money(todayRevenue)}</div><div class="stat-label">Today's Revenue (${todaySales.length} sales)</div></div><div class="stat-card"><div class="stat-icon green"><i class="fas fa-boxes-stacked"></i></div><div class="stat-value">${totalProducts}</div><div class="stat-label">Products (${totalVariants} variants)</div></div><div class="stat-card"><div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div><div class="stat-value">${lowStock}</div><div class="stat-label">Low Stock Alerts</div></div><div class="stat-card"><div class="stat-icon red"><i class="fas fa-chart-line"></i></div><div class="stat-value">${DB.sales.length}</div><div class="stat-label">Total Sales All Time</div></div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-bottom:20px"><div class="card"><div class="card-header"><h3>📅 Weekly Revenue</h3></div><div class="card-body"><div class="stat-value" id="weeklyRevenue">K0.00</div></div></div><div class="card"><div class="card-header"><h3>🔥 Top Products</h3></div><div class="card-body" id="topProducts"></div></div><div class="card"><div class="card-header"><h3>👨‍💼 Cashier Stats</h3></div><div class="card-body" id="cashierStats"></div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px"><div class="card" style="grid-column:${lowStock?'1':'1/-1'}"><div class="card-header"><h3>Recent Sales</h3></div><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Customer</th><th>Amount</th><th>Cashier</th><th>Time</th><th data-role-allow="admin"></th></tr></thead><tbody>${DB.sales.slice(-8).reverse().map(s=>`<tr><td><span class="badge badge-blue">${s.receiptNo}</span></td><td>${s.customerName}</td><td style="font-weight:700">${money(s.totalAmount)}</td><td>${s.cashierName}</td><td>${new Date(s.date).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})}</td><td data-role-allow="admin"><button class="btn btn-ghost btn-sm" style="color:var(--dn)" onclick="deleteSale('${s.id}')"><i class="fas fa-trash"></i></button></td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--tx3);padding:30px">No sales yet</td></tr>'}</tbody></table></div></div></div>${lowStock?`<div class="card"><div class="card-header"><h3><i class="fas fa-triangle-exclamation" style="color:var(--wn);margin-right:8px"></i>Low Stock</h3></div><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Product</th><th>Stock</th><th>Reorder</th></tr></thead><tbody>${DB.products.filter(p=>getTotalStock(p.id)<=p.reorder).map(p=>`<tr><td style="font-weight:600">${p.name}</td><td><span class="badge ${getTotalStock(p.id)===0?'badge-red':'badge-orange'}">${getTotalStock(p.id)} ${unitLabel(p)}</span></td><td>${p.reorder}</td></tr>`).join('')}</tbody></table></div></div></div>`:''}</div></div>`;
   renderAnalytics();
 }
 
@@ -782,9 +810,9 @@ async function deleteSale(saleId){
 
 function renderProducts(){
   const canEdit=hasAccess('products')&&currentUser.role!=='storekeeper';
-  renderTopbarActions(canEdit?`<button class="btn btn-primary btn-sm" id="addProductBtn"><i class="fas fa-plus"></i> Add Product</button>`:'');
-  if(canEdit) $('addProductBtn').addEventListener('click',()=>openProductModal());
-  $('mainContent').innerHTML=`<div class="fade-in"><div class="search-bar"><div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" id="prodSearch" placeholder="Search products..."></div><select class="filter-select" id="prodCatFilter"><option value="">All Categories</option>${DB.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select><select class="filter-select" id="prodBrandFilter"><option value="">All Brands</option>${DB.brands.map(b=>`<option value="${b.id}">${b.name}</option>`).join('')}</select></div><div class="card"><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Product</th><th>Brand</th><th>Category</th><th>Type</th><th>Unit</th><th>Variants</th><th>Stock</th><th>Price</th>${canEdit?'<th>Actions</th>':''}</tr></thead><tbody id="prodTableBody"></tbody></table></div></div></div></div>`;
+  renderTopbarActions(`<button class="btn btn-primary btn-sm" id="addProductBtn" data-role-min="manager" data-role-write="1"><i class="fas fa-plus"></i> Add Product</button>`);
+  if($('addProductBtn')) $('addProductBtn').addEventListener('click',()=>{if(canEdit)openProductModal()});
+  $('mainContent').innerHTML=`<div class="fade-in"><div class="search-bar"><div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" id="prodSearch" placeholder="Search products..."></div><select class="filter-select" id="prodCatFilter"><option value="">All Categories</option>${DB.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select><select class="filter-select" id="prodBrandFilter"><option value="">All Brands</option>${DB.brands.map(b=>`<option value="${b.id}">${b.name}</option>`).join('')}</select></div><div class="card"><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Product</th><th>Brand</th><th>Category</th><th>Type</th><th>Unit</th><th>Variants</th><th>Stock</th><th>Price</th><th data-role-min="manager">Actions</th></tr></thead><tbody id="prodTableBody"></tbody></table></div></div></div></div>`;
   renderProductTable();
   $('prodSearch').addEventListener('input',renderProductTable);
   $('prodCatFilter').addEventListener('change',renderProductTable);
@@ -797,10 +825,11 @@ function renderProductTable(){
   const canEdit=currentUser.role==='admin'||currentUser.role==='manager';
   const filtered=DB.products.filter(p=>{if(q&&!p.name.toLowerCase().includes(q)&&!(getBrand(p.brandId)||{}).name.toLowerCase().includes(q))return false;if(catF&&p.catId!==catF)return false;if(brF&&p.brandId!==brF)return false;return true});
   const tbody=$('prodTableBody');if(!tbody)return;
-  tbody.innerHTML=filtered.map(p=>{const brand=getBrand(p.brandId);const cat=getCat(p.catId);const variants=getProductVariants(p.id);const stock=getTotalStock(p.id);return `<tr class="clickable" data-pid="${p.id}"><td style="font-weight:600">${p.name}</td><td>${brand?brand.name:''}</td><td><span class="badge badge-blue"><i class="fas ${cat?cat.icon:''}" style="margin-right:4px"></i>${cat?cat.name:''}</span></td><td><span class="badge ${p.type==='serialized'?'badge-orange':'badge-gray'}">${p.type==='serialized'?'Serial/IMEI':'Quantity'}</span></td><td>${unitLabel(p)}</td><td>${variants.length}</td><td><span class="badge ${stock<=p.reorder?(stock===0?'badge-red':'badge-orange'):'badge-green'}">${stock} ${unitLabel(p)}</span></td><td>${money(p.price)}</td>${canEdit?`<td><button class="btn btn-ghost btn-sm edit-prod" data-id="${p.id}"><i class="fas fa-pen"></i></button><button class="btn btn-ghost btn-sm del-prod" data-id="${p.id}" style="color:var(--dn)"><i class="fas fa-trash"></i></button></td>`:''}</tr>`}).join('')||`<tr><td colspan="9" class="empty-state"><i class="fas fa-box-open"></i><p>No products found</p></td></tr>`;
+  tbody.innerHTML=filtered.map(p=>{const brand=getBrand(p.brandId);const cat=getCat(p.catId);const variants=getProductVariants(p.id);const stock=getTotalStock(p.id);return `<tr class="clickable" data-pid="${p.id}"><td style="font-weight:600">${p.name}</td><td>${brand?brand.name:''}</td><td><span class="badge badge-blue"><i class="fas ${cat?cat.icon:''}" style="margin-right:4px"></i>${cat?cat.name:''}</span></td><td><span class="badge ${p.type==='serialized'?'badge-orange':'badge-gray'}">${p.type==='serialized'?'Serial/IMEI':'Quantity'}</span></td><td>${unitLabel(p)}</td><td>${variants.length}</td><td><span class="badge ${stock<=p.reorder?(stock===0?'badge-red':'badge-orange'):'badge-green'}">${stock} ${unitLabel(p)}</span></td><td>${money(p.price)}</td><td data-role-min="manager"><button class="btn btn-ghost btn-sm edit-prod" data-id="${p.id}" data-role-min="manager" data-role-write="1"><i class="fas fa-pen"></i></button><button class="btn btn-ghost btn-sm del-prod" data-id="${p.id}" style="color:var(--dn)" data-role-min="admin"><i class="fas fa-trash"></i></button></td></tr>`}).join('')||`<tr><td colspan="9" class="empty-state"><i class="fas fa-box-open"></i><p>No products found</p></td></tr>`;
   tbody.querySelectorAll('tr.clickable').forEach(r=>r.addEventListener('click',e=>{if(e.target.closest('.edit-prod')||e.target.closest('.del-prod'))return;openProductDetail(r.dataset.pid)}));
   tbody.querySelectorAll('.edit-prod').forEach(b=>b.addEventListener('click',()=>openProductModal(b.dataset.id)));
   tbody.querySelectorAll('.del-prod').forEach(b=>b.addEventListener('click',()=>showConfirm('Delete this product and all its variants?',()=>{const id=b.dataset.id;const removedVariantIds=DB.variants.filter(v=>v.productId===id).map(v=>v.id);DB.variants=DB.variants.filter(v=>v.productId!==id);DB.serialized=DB.serialized.filter(s=>!removedVariantIds.includes(s.variantId));DB.products=DB.products.filter(p=>p.id!==id);saveDB();renderProducts();toast('Product deleted','success')})));
+  if(currentUser)applyRoleGuards(currentUser.role);
 }
 function openProductModal(editId){
   const p=editId?getProduct(editId):null;
@@ -820,7 +849,7 @@ function openAddVariantModal(pId){
 }
 
 function renderInventory(){
-  renderTopbarActions(`<button class="btn btn-primary btn-sm" id="stockInBtn"><i class="fas fa-arrow-down"></i> Stock In</button>`);
+  renderTopbarActions(`<button class="btn btn-primary btn-sm" id="stockInBtn" data-role-min="manager" data-role-write="1"><i class="fas fa-arrow-down"></i> Stock In</button>`);
   $('mainContent').innerHTML=`<div class="fade-in"><div class="tabs" id="invTabs"><div class="tab active" data-tab="overview">Stock Overview</div><div class="tab" data-tab="serialized">Serialized Items</div><div class="tab" data-tab="movements">Movements</div></div><div id="invContent"></div></div>`;
   $('stockInBtn').addEventListener('click',openStockInModal);
   document.querySelectorAll('#invTabs .tab').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('#invTabs .tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderInvTab(t.dataset.tab)}));
@@ -853,7 +882,7 @@ function openStockInModal(){
 
 function renderSales(){
   if(currentUser.role!=='admin'&&currentUser.role!=='cashier'){$('mainContent').innerHTML=`<div class="empty-state"><i class="fas fa-lock"></i><h3>Access Denied</h3><p>Only cashiers and admins can process sales.</p></div>`;return}
-  $('mainContent').innerHTML=`<div class="fade-in pos-layout"><div class="pos-products"><div class="search-bar"><div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" id="posSearch" placeholder="Search products..."></div><select class="filter-select" id="posCatFilter"><option value="">All</option>${DB.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></div><div class="product-grid" id="posGrid"></div></div><div class="pos-cart"><div class="cart-header"><span><i class="fas fa-shopping-cart" style="margin-right:8px"></i>Cart</span><span class="badge badge-blue" id="cartCount">0</span></div><div class="cart-items" id="cartItems"><div class="empty-state" style="padding:30px"><i class="fas fa-cart-shopping"></i><p>Cart is empty</p></div></div><div class="cart-footer"><div class="cart-total"><span>Subtotal</span><span id="cartSubtotal">${money(0)}</span></div><div class="cart-total"><span>Discount</span><span id="cartDiscount">${money(0)}</span></div><div class="cart-total grand"><span>Total</span><span id="cartTotal">${money(0)}</span></div><button class="btn btn-success" style="width:100%;margin-top:14px" id="checkoutBtn" disabled><i class="fas fa-credit-card"></i> Checkout</button></div></div></div>`;
+  $('mainContent').innerHTML=`<div class="fade-in pos-layout"><div class="pos-products"><div class="search-bar"><div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" id="posSearch" placeholder="Search products..."></div><select class="filter-select" id="posCatFilter"><option value="">All</option>${DB.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></div><div class="product-grid" id="posGrid"></div></div><div class="pos-cart"><div class="cart-header"><span><i class="fas fa-shopping-cart" style="margin-right:8px"></i>Cart</span><span class="badge badge-blue" id="cartCount">0</span></div><div class="cart-items" id="cartItems"><div class="empty-state" style="padding:30px"><i class="fas fa-cart-shopping"></i><p>Cart is empty</p></div></div><div class="cart-footer"><div class="cart-total"><span>Subtotal</span><span id="cartSubtotal">${money(0)}</span></div><div class="cart-total"><span>Discount</span><span id="cartDiscount">${money(0)}</span></div><div class="cart-total grand"><span>Total</span><span id="cartTotal">${money(0)}</span></div><button class="btn btn-success" style="width:100%;margin-top:14px" id="checkoutBtn" data-role-write="1" disabled><i class="fas fa-credit-card"></i> Checkout</button></div></div></div>`;
   renderPOSGrid();
   $('posSearch').addEventListener('input',renderPOSGrid);
   $('posCatFilter').addEventListener('change',renderPOSGrid);
