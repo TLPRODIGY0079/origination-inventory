@@ -1,8 +1,8 @@
-const CACHE = 'marble-pos-v1';
-const SHELL = ['index.html', 'landing.html', 'marble-logo.png', 'marble-logo.jpg', 'manifest.json'];
+const CACHE = 'marble-pos-v2';
+const ASSETS = ['/', '/index.html', '/login.html', '/supabase.js', '/manifest.json', '/marble-logo.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
   self.skipWaiting();
 });
 
@@ -14,15 +14,14 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Only cache GET requests for same-origin assets; let Supabase API calls pass through
-  if (e.request.method !== 'GET' || e.request.url.includes('supabase.co')) return;
+  if (e.request.method !== 'GET') return;
   e.respondWith(
-    fetch(e.request)
-      .then(res => {
+    caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
+      if (res && res.status === 200 && res.type === 'basic') {
         const clone = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, clone));
-        return res;
-      })
-      .catch(() => caches.match(e.request))
+      }
+      return res;
+    }))
   );
 });

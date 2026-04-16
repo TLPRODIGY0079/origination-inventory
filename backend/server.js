@@ -296,6 +296,118 @@ app.post('/invite-staff', async (req, res) => {
 
 
 // =============================================================================
+
+
+// =============================================================================
+// GET /check-subscription
+// Validates the calling user's business subscription status
+// =============================================================================
+app.get('/check-subscription', async (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'No token' });
+
+  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: 'Invalid token' });
+
+  const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user.id).single();
+  if (!profile) return res.status(404).json({ error: 'Profile not found' });
+
+  const { data: business } = await supabase.from('businesses').select('subscription_status, expires_at').eq('id', profile.business_id).single();
+  if (!business) return res.json({ active: true }); // no businesses table = allow access
+
+  const active = business.subscription_status === 'active' && new Date(business.expires_at) > new Date();
+  res.json({ active, subscription_status: business.subscription_status, expires_at: business.expires_at });
+});
+
+
+// =============================================================================
+// POST /send-weekly-report
+// Sends a weekly sales summary email via Resend to the business owner
+// Body: { business_id } — called by a cron job (e.g. every Monday 8am)
+// =============================================================================
+app.post('/send-weekly-report', async (req, res) => {
+  const { business_id } = req.body;
+  if (!business_id) return res.status(400).json({ error: 'business_id required' });
+
+  // Verify request comes from internal cron (simple shared secret)
+  const secret = req.headers['x-cron-secret'];
+  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    // Get business owner email
+    const { data: business } = await supabase.from('businesses').select('name').eq('id', business_id).single();
+    const { data: owner } = await supabase.from('profiles').select('full_name, id').eq('business_id', business_id).eq('role', 'admin').single();
+    const { data: authUser } = await supabase.auth.admin.getUserById(owner.id);
+    const ownerEmail = authUser?.user?.email;
+    if (!ownerEmail) return res.status(404).json({ error: 'Owner email not found' });
+
+    // Get last 7 days of sales
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoStr = weekAgo.toISOString().slice(0, 10);
+    const { data: sales } = await supabase.from('sales').select('total_amount, cashier_name, date_str').eq('business_id', business_id).gte('date_str', weekAgoStr);
+
+    const totalRevenue = (sales || []).reduce((s, r) => s + Number(r.total_amount || 0), 0);
+    const totalSales = (sales || []).length;
+    const formatted = totalRevenue.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const rows = (sales || []).map(s => `<tr><td>${s.date_str}</td><td>${s.cashier_name}</td><td>K${Number(s.total_amount).toFixed(2)}</td></tr>`).join('');
+
+    const html = `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <h2 style="color:#007AFF">📊 Weekly Sales Report — ${business?.name || 'Your Business'}</h2>
+        <p>Here's your sales summary for the past 7 days:</p>
+        <div style="background:#f2f2f7;border-radius:12px;padding:20px;margin:16px 0">
+          <div style="font-size:28px;font-weight:800;color:#007AFF">K${formatted}</div>
+          <div style="color:#636366;margin-top:4px">${totalSales} sales this week</div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="background:#007AFF;color:#fff"><th style="padding:8px">Date</th><th style="padding:8px">Cashier</th><th style="padding:8px">Amount</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="3" style="text-align:center;padding:16px;color:#999">No sales this week</td></tr>'}</tbody>
+        </table>
+        <p style="color:#999;font-size:12px;margin-top:24px">Marble POS — automated weekly report</p>
+      </div>`;
+
+    // Send via Resend
+    const { Resend } = require('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || 'reports@marblepos.app',
+      to: ownerEmail,
+      subject: `Weekly Sales Report — ${business?.name || 'Your Business'}`,
+      html
+    });
+
+    res.json({ ok: true, sent_to: ownerEmail, total_revenue: totalRevenue, total_sales: totalSales });
+  } catch (err) {
+    console.error('Weekly report error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 app.listen(process.env.PORT || 3000, () =>
   console.log(`Marble POS backend running on port ${process.env.PORT || 3000}`)
 );
+
+// =============================================================================
+// CRON — Send weekly reports every Monday at 8:00 AM
+// Requires: npm install node-cron
+// =============================================================================
+try {
+  const cron = require('node-cron');
+  cron.schedule('0 8 * * 1', async () => {
+    console.log('[cron] Sending weekly reports...');
+    try {
+      // Get all distinct business_ids
+      const { data: businesses } = await supabase.from('businesses').select('id');
+      for (const biz of (businesses || [])) {
+        await fetch(`http://localhost:${process.env.PORT || 3000}/send-weekly-report`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-cron-secret': process.env.CRON_SECRET },
+          body: JSON.stringify({ business_id: biz.id })
+        }).catch(e => console.error('[cron] report failed for', biz.id, e.message));
+      }
+    } catch (e) { console.error('[cron] error:', e.message); }
+  });
+  console.log('[cron] Weekly report scheduler active (Mon 08:00)');
+} catch (e) {
+  console.warn('[cron] node-cron not installed — run: npm install node-cron');
+}

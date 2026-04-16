@@ -6,6 +6,10 @@
 <meta name="theme-color" content="#007AFF">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 <script defer src="https://vercel.com/insights/script.js"></script>
 <script src="supabase.js"></script>
 <script>
@@ -603,6 +607,8 @@ async function restoreSession(){
   $('appShell').classList.add('active');
   renderSidebar();
   navigate('dashboard');
+  checkAccess();
+  ensureReferralCode();
   return true;
 }
 // Plan hierarchy: free < pro < enterprise
@@ -752,6 +758,25 @@ function applyRoleGuards(role){
   });
 }
 
+// ── Subscription Check ───────────────────────────────────────────────────────
+async function checkSubscription() {
+  if (!currentUser || !currentUser.business_id) return true; // no biz = skip
+  try {
+    const { data: biz, error } = await supabaseClient
+      .from('businesses')
+      .select('subscription_status, expires_at')
+      .eq('id', currentUser.business_id)
+      .maybeSingle();
+    if (error || !biz) return true; // table may not exist yet — allow access
+    const active = biz.subscription_status === 'active';
+    const notExpired = !biz.expires_at || new Date(biz.expires_at) > new Date();
+    if (!active || !notExpired) {
+      window.location.href = 'payment.html';
+      return false;
+    }
+  } catch(e) { console.warn('Subscription check failed:', e); }
+  return true;
+}
 function navigate(page){
   if(!hasAccess(page)){toast('Access denied','error');return}
   currentPage=page;
@@ -842,7 +867,7 @@ async function getLeaderboard() {
   return Object.entries(map).map(([cashier_name, total_amount]) => ({ cashier_name, total_amount })).sort((a, b) => b.total_amount - a.total_amount);
 }
 
-let _revenueChart = null;
+var _revenueChart = null;
 function renderRevenueChart(weekData) {
   if (_revenueChart) { _revenueChart.destroy(); _revenueChart = null; }
   const canvas = document.getElementById('revenueChart');
@@ -918,6 +943,7 @@ async function deleteSale(saleId){
       if(itemsErr)throw itemsErr;
       const{error:saleErr}=await supabaseClient.from('sales').delete().eq('id',saleId);
       if(saleErr)throw saleErr;
+      logAction('DELETE','sales',saleId);
       DB=await loadDB();
       toast('Sale deleted and stock restored','success');
       renderDashboard();
@@ -998,6 +1024,7 @@ function openStockInModal(){
 }
 
 function renderSales(){
+  renderTopbarActions('<button class="btn btn-outline btn-sm" onclick="openBarcodeScanner()"><i class="fas fa-barcode"></i> Scan</button>');
   if(currentUser.role!=='admin'&&currentUser.role!=='cashier'){$('mainContent').innerHTML=`<div class="empty-state"><i class="fas fa-lock"></i><h3>Access Denied</h3><p>Only cashiers and admins can process sales.</p></div>`;return}
   $('mainContent').innerHTML=`<div class="fade-in pos-layout"><div class="pos-products"><div class="search-bar"><div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" id="posSearch" placeholder="Search products..."></div><select class="filter-select" id="posCatFilter"><option value="">All</option>${DB.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></div><div class="product-grid" id="posGrid"></div></div><div class="pos-cart"><div class="cart-header"><span><i class="fas fa-shopping-cart" style="margin-right:8px"></i>Cart</span><span class="badge badge-blue" id="cartCount">0</span></div><div class="cart-items" id="cartItems"><div class="empty-state" style="padding:30px"><i class="fas fa-cart-shopping"></i><p>Cart is empty</p></div></div><div class="cart-footer"><div class="cart-total"><span>Subtotal</span><span id="cartSubtotal">${money(0)}</span></div><div class="cart-total"><span>Discount</span><span id="cartDiscount">${money(0)}</span></div><div class="cart-total grand"><span>Total</span><span id="cartTotal">${money(0)}</span></div><button class="btn btn-success" style="width:100%;margin-top:14px" id="checkoutBtn" data-role-write="1" disabled><i class="fas fa-credit-card"></i> Checkout</button></div></div></div>`;
   renderPOSGrid();
@@ -1396,8 +1423,8 @@ function exportToPDF(sales) {
   doc.save('sales-report-' + today() + '.pdf');
 }
 // ── Low Stock Monitor ────────────────────────────────────────────────────────
-let _lowStockIntervalId = null;
-let _prevLowStockIds = new Set();
+var _lowStockIntervalId = null;
+var _prevLowStockIds = new Set();
 
 function renderNotificationBanner(items) {
   const banner = document.getElementById('lowStockBanner');
@@ -1445,7 +1472,7 @@ function stopLowStockMonitor() {
 }
 
 // ── Push Notifications ───────────────────────────────────────────────────────
-let _pushPermission = null; // 'granted' | 'denied' | 'default' | null
+var _pushPermission = null; // 'granted' | 'denied' | 'default' | null
 
 function requestPushPermission() {
   if (!('Notification' in window)) return;
@@ -1460,6 +1487,110 @@ function sendPushNotification(items) {
   const body = items.map(i => i.product_name + ' (' + i.qty + ' left)').join(', ');
   new Notification('Low Stock Alert ⚠️', { body, icon: 'marble-logo.png' });
 }
+
+// ── Subscription Check ───────────────────────────────────────────────────────
+async function checkAccess() {
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) return;
+    const res = await fetch('/check-subscription', {
+      headers: { Authorization: 'Bearer ' + session.access_token }
+    });
+    if (!res.ok) return; // backend unreachable — allow access
+    const json = await res.json();
+    if (json.active === false) {
+      window.location.href = 'payment.html';
+    }
+  } catch (e) {
+    console.warn('checkAccess failed (offline?):', e);
+  }
+}
+
+// ── Audit Logging ────────────────────────────────────────────────────────────
+async function logAction(action, tableName, recordId) {
+  try {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) return;
+    await supabaseClient.from('audit_logs').insert({
+      user_id: user.id,
+      action,
+      table_name: tableName,
+      record_id: recordId,
+      created_at: new Date().toISOString()
+    });
+  } catch (e) { console.warn('logAction failed:', e); }
+}
+
+// ── Referral System ──────────────────────────────────────────────────────────
+function generateReferralCode() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+async function ensureReferralCode() {
+  if (!currentUser) return;
+  const { data: profile } = await supabaseClient.from('profiles').select('referral_code').eq('id', currentUser.id).single();
+  if (!profile || profile.referral_code) return; // already has one
+  const code = generateReferralCode();
+  await supabaseClient.from('profiles').update({ referral_code: code }).eq('id', currentUser.id);
+  currentUser.referral_code = code;
+}
+
+async function applyReferral(referredByCode) {
+  if (!referredByCode) return;
+  await supabaseClient.from('profiles').update({ referred_by: referredByCode }).eq('id', currentUser.id);
+  // Trigger trial extension via RPC if it exists
+  try { await supabaseClient.rpc('extend_trial', { code: referredByCode }); } catch(e) {}
+}
+
+// ── Barcode Scanner ──────────────────────────────────────────────────────────
+var _scannerActive = false;
+
+function openBarcodeScanner() {
+  if (!window.Quagga) { toast('Scanner not available', 'error'); return; }
+  openModal('Barcode Scanner', `
+    <div id="scannerContainer" style="position:relative;width:100%;max-width:400px;margin:0 auto">
+      <div id="interactive" class="viewport" style="width:100%;height:280px;overflow:hidden;border-radius:var(--rs);background:#000"></div>
+      <div style="text-align:center;margin-top:12px;color:var(--tx2);font-size:13px">Point camera at barcode</div>
+      <div id="scanResult" style="text-align:center;margin-top:8px;font-weight:700;font-size:15px;color:var(--ac)"></div>
+    </div>`, '<button class="btn btn-outline btn-sm" onclick="closeBarcodeScanner()">Close</button>');
+
+  setTimeout(() => {
+    _scannerActive = true;
+    Quagga.init({
+      inputStream: { type: 'LiveStream', target: document.querySelector('#interactive'), constraints: { facingMode: 'environment' } },
+      decoder: { readers: ['code_128_reader', 'ean_reader', 'ean_8_reader', 'code_39_reader', 'upc_reader'] }
+    }, err => {
+      if (err) { toast('Camera access denied', 'error'); return; }
+      Quagga.start();
+    });
+
+    Quagga.onDetected(result => {
+      const code = result.codeResult.code;
+      if (!code) return;
+      document.getElementById('scanResult').textContent = '✓ ' + code;
+      Quagga.stop(); _scannerActive = false;
+      setTimeout(() => {
+        closeModal();
+        // Search POS grid for matching SKU
+        const match = DB.variants.find(v => v.sku === code);
+        if (match) {
+          const p = getProduct(match.productId);
+          if (p) { selectProductForCart(p.id); toast('Product added: ' + p.name, 'success'); }
+          else toast('SKU found but product missing', 'error');
+        } else {
+          toast('No product found for: ' + code, 'error');
+        }
+      }, 600);
+    });
+  }, 300);
+}
+
+function closeBarcodeScanner() {
+  if (_scannerActive && window.Quagga) { try { Quagga.stop(); } catch(e) {} _scannerActive = false; }
+  closeModal();
+}
+
+
   async function startApp(){
     // Register service worker for offline PWA support
     if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
@@ -1486,6 +1617,8 @@ function sendPushNotification(items) {
         $('appShell').classList.add('active');
         renderSidebar();
         navigate('dashboard');
+        checkAccess();
+        ensureReferralCode();
         if(['admin','manager'].includes(currentUser.role)) { startLowStockMonitor(); requestPushPermission(); }
       }else{
         $('loginError').textContent='Invalid email or password';

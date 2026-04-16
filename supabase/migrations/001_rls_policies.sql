@@ -185,3 +185,40 @@ CREATE POLICY "profiles_select"
       AND business_id = get_my_business_id()
     )
   );
+
+-- -----------------------------------------------------------------------------
+-- 9. Referral system columns
+-- -----------------------------------------------------------------------------
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referral_code TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referred_by TEXT;
+
+-- -----------------------------------------------------------------------------
+-- 10. Audit logs table
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID REFERENCES auth.users(id),
+  action      TEXT NOT NULL,
+  table_name  TEXT NOT NULL,
+  record_id   TEXT,
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+-- Admins can read audit logs for their business
+CREATE POLICY "audit_logs_select" ON audit_logs FOR SELECT TO authenticated
+  USING (user_id = auth.uid() OR get_my_role() = 'admin');
+-- Any authenticated user can insert their own log entries
+CREATE POLICY "audit_logs_insert" ON audit_logs FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid());
+
+-- -----------------------------------------------------------------------------
+-- 11. extend_trial RPC (awards 7 free days to the referrer)
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION extend_trial(code TEXT)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE profiles
+  SET trial_ends_at = COALESCE(trial_ends_at, now()) + INTERVAL '7 days'
+  WHERE referral_code = code;
+END;
+$$;
