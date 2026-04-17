@@ -18,8 +18,12 @@ app.use(cors({ origin: process.env.FRONTEND_URL }));
 // ── Raw body for Stripe webhook (MUST come before express.json) ───────────────
 app.post('/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
 
-// ── JSON body for everything else ─────────────────────────────────────────────
-app.use(express.json());
+// ── Health check ─────────────────────────────────────────────────────────────
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', service: 'Marble POS Backend', version: '1.0.0' });
+});
+
+
 
 
 // =============================================================================
