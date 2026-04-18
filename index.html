@@ -1146,6 +1146,8 @@ async function completeSale(subtotal){
       await supabaseClient.from('stock_moves').insert([{id:uid(),type:'sale',variant_id:si.variant_id,qty:si.qty,ref:saleId,date:sale.date,user_id:currentUser.id,notes:'Sale '+receipt}]);
     }
     DB=await loadDB();
+    if(currentPage==='dashboard') renderDashboard();
+    if(currentPage==='history') renderHistory();
   }catch(err){
     console.error('Online save failed, queuing offline:',err);
     await IDB.add({ id:saleId, sale, items:saleItems });
