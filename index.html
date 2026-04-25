@@ -8,8 +8,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 <script defer src="https://vercel.com/insights/script.js"></script>
 <script src="supabase.js"></script>
 <script>
@@ -226,13 +224,13 @@ tr:hover td{background:var(--bg)}
   #stickyCheckoutBar{display:flex}
   .dash-charts{grid-template-columns:1fr !important}
 }
-#stickyCheckoutBar{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--bd);padding:12px 16px;align-items:center;justify-content:space-between;gap:12px;z-index:200;box-shadow:0 -4px 16px rgba(0,0,0,.1)}
-#stickyCheckoutBar .sticky-total{font-size:18px;font-weight:800}
-#stickyCheckoutBar .sticky-total span{font-size:12px;color:var(--tx2);font-weight:500;display:block}
 @media(max-width:480px){
   .stats-grid{grid-template-columns:1fr}
   .login-card{padding:32px 24px}
 }
+#stickyCheckoutBar{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--bd);padding:12px 16px;align-items:center;justify-content:space-between;gap:12px;z-index:200;box-shadow:0 -4px 16px rgba(0,0,0,.1)}
+#stickyCheckoutBar .sticky-total{font-size:18px;font-weight:800}
+#stickyCheckoutBar .sticky-total span{font-size:12px;color:var(--tx2);font-weight:500;display:block}
 
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .fade-in{animation:fadeIn .35s ease}
@@ -277,10 +275,14 @@ tr:hover td{background:var(--bg)}
       </div>
       <div class="topbar-actions" id="topbarActions"></div>
     </header>
+    <div id="lowStockBanner" style="display:none;background:var(--wn2);border-bottom:2px solid var(--wn);padding:10px 28px;font-size:13px;color:var(--wn);font-weight:600;flex-shrink:0"></div>
     <div class="content" id="mainContent"></div>
+    <div id="stickyCheckoutBar">
+      <div class="sticky-total"><span>Cart Total</span><span id="stickyTotal">K0.00</span></div>
+      <button class="btn btn-success" style="flex:1;max-width:200px" onclick="checkout()"><i class="fas fa-cash-register"></i> Checkout</button>
+    </div>
   </div>
 </div>
-<div id="stickyCheckoutBar"><div class="sticky-total"><span>Cart Total</span><span id="stickyTotal">K0.00</span></div><button class="btn btn-success" onclick="openCheckoutModal()" style="min-width:140px"><i class="fas fa-check"></i> Checkout</button></div>
 
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal" id="modalBox">
@@ -607,8 +609,7 @@ async function restoreSession(){
   $('appShell').classList.add('active');
   renderSidebar();
   navigate('dashboard');
-  checkAccess();
-  ensureReferralCode();
+  if(currentUser.role==='admin'||currentUser.role==='manager') startLowStockMonitor();
   return true;
 }
 // Plan hierarchy: free < pro < enterprise
@@ -758,25 +759,6 @@ function applyRoleGuards(role){
   });
 }
 
-// ── Subscription Check ───────────────────────────────────────────────────────
-async function checkSubscription() {
-  if (!currentUser || !currentUser.business_id) return true; // no biz = skip
-  try {
-    const { data: biz, error } = await supabaseClient
-      .from('businesses')
-      .select('subscription_status, expires_at')
-      .eq('id', currentUser.business_id)
-      .maybeSingle();
-    if (error || !biz) return true; // table may not exist yet — allow access
-    const active = biz.subscription_status === 'active';
-    const notExpired = !biz.expires_at || new Date(biz.expires_at) > new Date();
-    if (!active || !notExpired) {
-      window.location.href = 'payment.html';
-      return false;
-    }
-  } catch(e) { console.warn('Subscription check failed:', e); }
-  return true;
-}
 function navigate(page){
   if(!hasAccess(page)){toast('Access denied','error');return}
   currentPage=page;
@@ -806,7 +788,7 @@ function unitLabel(p){return p.unit||'pcs'}
 
 function _getWeekBounds() {
   const now = new Date();
-  const day = now.getDay();
+  const day = now.getDay(); // 0=Sun,1=Mon,...,6=Sat
   const diffToMon = (day === 0 ? -6 : 1 - day);
   const mon = new Date(now);
   mon.setDate(now.getDate() + diffToMon);
@@ -814,32 +796,31 @@ function _getWeekBounds() {
   const sun = new Date(mon);
   sun.setDate(mon.getDate() + 6);
   sun.setHours(23,59,59,999);
+  // date strings YYYY-MM-DD
   const monStr = mon.toISOString().slice(0,10);
   const sunStr = sun.toISOString().slice(0,10);
   return { mon, sun, monStr, sunStr };
 }
 
 async function getKPIs() {
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = today();
   const { monStr, sunStr } = _getWeekBounds();
-  const bizId = currentUser && currentUser.business_id;
-  let todayQ = supabaseClient.from('sales').select('total_amount').eq('date_str', todayStr);
-  let weekQ  = supabaseClient.from('sales').select('total_amount').gte('date_str', monStr).lte('date_str', sunStr);
-  let stockQ = supabaseClient.from('variants').select('id', { count: 'exact', head: true }).lt('qty', 10);
-  if (bizId) { todayQ = todayQ.eq('business_id', bizId); weekQ = weekQ.eq('business_id', bizId); stockQ = stockQ.eq('business_id', bizId); }
-  const [todayRes, weekRes, stockRes] = await Promise.all([todayQ, weekQ, stockQ]);
+  const [todayRes, weekRes, stockRes] = await Promise.all([
+    supabaseClient.from('sales').select('total_amount').eq('date_str', todayStr),
+    supabaseClient.from('sales').select('total_amount').gte('date_str', monStr).lte('date_str', sunStr),
+    supabaseClient.from('variants').select('id', { count: 'exact', head: true }).lt('qty', 10)
+  ]);
+
   const todaySales = (todayRes.data || []).reduce((s, r) => s + Number(r.total_amount || 0), 0);
   const weekSales  = (weekRes.data  || []).reduce((s, r) => s + Number(r.total_amount || 0), 0);
   const lowStockCount = stockRes.count || 0;
+
   return { todaySales, weekSales, lowStockCount };
 }
 
 async function getWeeklyRevenue() {
   const { monStr, sunStr } = _getWeekBounds();
-  const bizId = currentUser && currentUser.business_id;
-  let q = supabaseClient.from('sales').select('date_str, total_amount').gte('date_str', monStr).lte('date_str', sunStr);
-  if (bizId) q = q.eq('business_id', bizId);
-  const { data } = await q;
+  const { data } = await supabaseClient.from('sales').select('date_str, total_amount').gte('date_str', monStr).lte('date_str', sunStr);
   const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const totals = Array(7).fill(0);
   (data || []).forEach(row => {
@@ -851,23 +832,32 @@ async function getWeeklyRevenue() {
 }
 
 async function getTopProducts() {
-  const { data } = await supabaseClient.from('sale_items').select('product_name, qty');
+  const bizId = currentUser && currentUser.business_id;
+  let q = supabaseClient.from('sale_items').select('product_name, qty');
+  // sale_items doesn't have business_id directly; filter via sales join if needed
+  const { data } = await q;
   const map = {};
-  (data || []).forEach(i => { map[i.product_name] = (map[i.product_name] || 0) + Number(i.qty || 0); });
-  return Object.entries(map).map(([product_name, total_qty]) => ({ product_name, total_qty })).sort((a, b) => b.total_qty - a.total_qty).slice(0, 5);
+  (data || []).forEach(i => {
+    map[i.product_name] = (map[i.product_name] || 0) + Number(i.qty || 0);
+  });
+  return Object.entries(map)
+    .map(([product_name, total_qty]) => ({ product_name, total_qty }))
+    .sort((a, b) => b.total_qty - a.total_qty)
+    .slice(0, 5);
 }
 
 async function getLeaderboard() {
-  const bizId = currentUser && currentUser.business_id;
-  let q = supabaseClient.from('sales').select('cashier_name, total_amount');
-  if (bizId) q = q.eq('business_id', bizId);
-  const { data } = await q;
+  const { data } = await supabaseClient.from('sales').select('cashier_name, total_amount');
   const map = {};
-  (data || []).forEach(s => { map[s.cashier_name] = (map[s.cashier_name] || 0) + Number(s.total_amount || 0); });
-  return Object.entries(map).map(([cashier_name, total_amount]) => ({ cashier_name, total_amount })).sort((a, b) => b.total_amount - a.total_amount);
+  (data || []).forEach(s => {
+    map[s.cashier_name] = (map[s.cashier_name] || 0) + Number(s.total_amount || 0);
+  });
+  return Object.entries(map)
+    .map(([cashier_name, total_amount]) => ({ cashier_name, total_amount }))
+    .sort((a, b) => b.total_amount - a.total_amount);
 }
 
-var _revenueChart = null;
+let _revenueChart = null;
 function renderRevenueChart(weekData) {
   if (_revenueChart) { _revenueChart.destroy(); _revenueChart = null; }
   const canvas = document.getElementById('revenueChart');
@@ -875,18 +865,20 @@ function renderRevenueChart(weekData) {
   const acColor = getComputedStyle(document.documentElement).getPropertyValue('--ac').trim() || '#007AFF';
   _revenueChart = new Chart(canvas, {
     type: 'bar',
-    data: { labels: weekData.map(d => d.day), datasets: [{ label: 'Revenue (K)', data: weekData.map(d => d.total), backgroundColor: acColor, borderRadius: 6 }] },
+    data: {
+      labels: weekData.map(d => d.day),
+      datasets: [{ label: 'Revenue (K)', data: weekData.map(d => d.total), backgroundColor: acColor, borderRadius: 6 }]
+    },
     options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: v => 'K'+v } } } }
   });
 }
 
 async function renderDashboard() {
   $('mainContent').innerHTML = `<div class="fade-in">
-    <div id="lowStockBanner" style="display:none;background:var(--wn2);border:1px solid var(--wn);border-radius:var(--rs);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--wn);font-weight:600"></div>
     <div class="stats-grid" id="kpiCards">
-      <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-arrow-trend-up"></i></div><div class="stat-value" id="kpiToday">K0.00</div><div class="stat-label">Today's Sales</div></div>
-      <div class="stat-card"><div class="stat-icon green"><i class="fas fa-calendar-week"></i></div><div class="stat-value" id="kpiWeek">K0.00</div><div class="stat-label">This Week's Sales</div></div>
-      <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div><div class="stat-value" id="kpiLowStock">0</div><div class="stat-label">Low Stock Items</div></div>
+      <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-arrow-trend-up"></i></div><div class="stat-value" id="kpiToday">—</div><div class="stat-label">Today's Sales</div></div>
+      <div class="stat-card"><div class="stat-icon green"><i class="fas fa-calendar-week"></i></div><div class="stat-value" id="kpiWeek">—</div><div class="stat-label">This Week's Sales</div></div>
+      <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-triangle-exclamation"></i></div><div class="stat-value" id="kpiLowStock">—</div><div class="stat-label">Low Stock Items</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px" class="dash-charts">
       <div class="card"><div class="card-header"><h3>Weekly Revenue</h3></div><div class="card-body"><canvas id="revenueChart" height="180"></canvas></div></div>
@@ -895,6 +887,7 @@ async function renderDashboard() {
     <div class="card"><div class="card-header"><h3>Cashier Leaderboard</h3></div><div class="card-body np"><table style="width:100%;font-size:13px"><thead><tr><th style="padding:10px 16px">#</th><th style="padding:10px 16px">Cashier</th><th style="padding:10px 16px;text-align:right">Total Sales</th></tr></thead><tbody id="leaderboardBody"></tbody></table></div></div>
   </div>`;
 
+  // Load KPIs
   try {
     const { todaySales, weekSales, lowStockCount } = await getKPIs();
     $('kpiToday').textContent = money(todaySales);
@@ -902,25 +895,32 @@ async function renderDashboard() {
     $('kpiLowStock').textContent = lowStockCount;
   } catch(e) { console.error('KPI error', e); }
 
+  // Load revenue chart
   try {
     const weekData = await getWeeklyRevenue();
     renderRevenueChart(weekData);
   } catch(e) { console.error('Chart error', e); }
 
+  // Load top products
   try {
     const tops = await getTopProducts();
     const tbody = $('topProductsBody');
-    if (tbody) tbody.innerHTML = tops.length
-      ? tops.map(t => `<tr><td style="padding:10px 16px;font-weight:600">${t.product_name}</td><td style="padding:10px 16px;text-align:right">${t.total_qty}</td></tr>`).join('')
-      : `<tr><td colspan="2" style="padding:20px;text-align:center;color:var(--tx3)">No sales yet</td></tr>`;
+    if (tbody) {
+      tbody.innerHTML = tops.length
+        ? tops.map(t => `<tr><td style="padding:10px 16px;font-weight:600">${t.product_name}</td><td style="padding:10px 16px;text-align:right">${t.total_qty}</td></tr>`).join('')
+        : `<tr><td colspan="2" style="padding:20px;text-align:center;color:var(--tx3)">No sales yet</td></tr>`;
+    }
   } catch(e) { console.error('Top products error', e); }
 
+  // Load leaderboard
   try {
     const board = await getLeaderboard();
     const tbody = $('leaderboardBody');
-    if (tbody) tbody.innerHTML = board.length
-      ? board.map((b, i) => `<tr><td style="padding:10px 16px;color:var(--tx3);font-weight:700">${i+1}</td><td style="padding:10px 16px;font-weight:600">${b.cashier_name}</td><td style="padding:10px 16px;text-align:right;font-weight:700">${money(b.total_amount)}</td></tr>`).join('')
-      : `<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--tx3)">No sales yet</td></tr>`;
+    if (tbody) {
+      tbody.innerHTML = board.length
+        ? board.map((b, i) => `<tr><td style="padding:10px 16px;color:var(--tx3);font-weight:700">${i+1}</td><td style="padding:10px 16px;font-weight:600">${b.cashier_name}</td><td style="padding:10px 16px;text-align:right;font-weight:700">${money(b.total_amount)}</td></tr>`).join('')
+        : `<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--tx3)">No sales yet</td></tr>`;
+    }
   } catch(e) { console.error('Leaderboard error', e); }
 }
 
@@ -943,7 +943,6 @@ async function deleteSale(saleId){
       if(itemsErr)throw itemsErr;
       const{error:saleErr}=await supabaseClient.from('sales').delete().eq('id',saleId);
       if(saleErr)throw saleErr;
-      logAction('DELETE','sales',saleId);
       DB=await loadDB();
       toast('Sale deleted and stock restored','success');
       renderDashboard();
@@ -1024,7 +1023,6 @@ function openStockInModal(){
 }
 
 function renderSales(){
-  renderTopbarActions('<button class="btn btn-outline btn-sm" onclick="openBarcodeScanner()"><i class="fas fa-barcode"></i> Scan</button>');
   if(currentUser.role!=='admin'&&currentUser.role!=='cashier'){$('mainContent').innerHTML=`<div class="empty-state"><i class="fas fa-lock"></i><h3>Access Denied</h3><p>Only cashiers and admins can process sales.</p></div>`;return}
   $('mainContent').innerHTML=`<div class="fade-in pos-layout"><div class="pos-products"><div class="search-bar"><div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" id="posSearch" placeholder="Search products..."></div><select class="filter-select" id="posCatFilter"><option value="">All</option>${DB.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></div><div class="product-grid" id="posGrid"></div></div><div class="pos-cart"><div class="cart-header"><span><i class="fas fa-shopping-cart" style="margin-right:8px"></i>Cart</span><span class="badge badge-blue" id="cartCount">0</span></div><div class="cart-items" id="cartItems"><div class="empty-state" style="padding:30px"><i class="fas fa-cart-shopping"></i><p>Cart is empty</p></div></div><div class="cart-footer"><div class="cart-total"><span>Subtotal</span><span id="cartSubtotal">${money(0)}</span></div><div class="cart-total"><span>Discount</span><span id="cartDiscount">${money(0)}</span></div><div class="cart-total grand"><span>Total</span><span id="cartTotal">${money(0)}</span></div><button class="btn btn-success" style="width:100%;margin-top:14px" id="checkoutBtn" data-role-write="1" disabled><i class="fas fa-credit-card"></i> Checkout</button></div></div></div>`;
   renderPOSGrid();
@@ -1073,7 +1071,6 @@ function renderCart(){
   if($('cartDiscount'))$('cartDiscount').textContent=money(0);
   if($('cartTotal'))$('cartTotal').textContent=money(subtotal);
   if($('cartCount'))$('cartCount').textContent=cart.length;
-  const _stickyTotal=document.getElementById('stickyTotal');if(_stickyTotal)_stickyTotal.textContent=money(cart.reduce((s,ci)=>s+ci.price*ci.qty,0));
 }
 function openCheckoutModal(){
   if(cart.length===0)return;
@@ -1099,7 +1096,8 @@ async function completeSale(subtotal){
     discount,
     payment_method:$('coPayment')?$('coPayment').value:'cash',
     date:new Date().toISOString(),
-    date_str:new Date().toISOString().slice(0,10)
+    date_str:new Date().toISOString().slice(0,10),
+    business_id:currentUser.business_id||null
   };
   const saleItems=cart.map(ci=>({id:uid(),sale_id:saleId,variant_id:ci.variantId,product_name:ci.productName,variant_desc:ci.variantDesc,serialized:ci.serialized,serial_id:ci.serialId||null,serial_num:ci.serialNum||null,qty:ci.qty,price:ci.price,discount:0}));
 
@@ -1147,140 +1145,126 @@ async function completeSale(subtotal){
     }
     DB=await loadDB();
     if(currentPage==='dashboard') renderDashboard();
-    if(currentPage==='history') renderHistory();
   }catch(err){
     console.error('Online save failed, queuing offline:',err);
     await IDB.add({ id:saleId, sale, items:saleItems });
     toast('Network error — sale queued for sync','info');
   }
 }
-function generateReceiptPDF(sale, items) {
-  if (!window.jspdf) { toast('PDF library not loaded', 'error'); return null; }
+function showReceipt(sale){
+  const items=DB.saleItems.filter(si=>si.saleId===sale.id);
+  openModal('Receipt — '+sale.receiptNo,`<div class="receipt"><div class="receipt-center"><strong style="font-size:16px">STOREVAULT</strong><br>Grocery Inventory & POS<br>${new Date(sale.date).toLocaleString()}</div><hr><div class="receipt-row"><span>Receipt:</span><span>${sale.receiptNo}</span></div><div class="receipt-row"><span>Cashier:</span><span>${sale.cashierName}</span></div><div class="receipt-row"><span>Customer:</span><span>${sale.customerName}</span></div><hr>${items.map(i=>`<div style="margin-bottom:6px"><div style="font-weight:700">${i.productName}</div><div style="font-size:11px;color:#666">${i.variantDesc}${i.serialNum?' | S/N: '+i.serialNum:''}</div><div class="receipt-row"><span>${i.qty} × ${money(i.price)}</span><span>${money(i.qty*i.price)}</span></div></div>`).join('')}<hr><div class="receipt-row"><span>Subtotal:</span><span>${money(sale.totalAmount+sale.discount)}</span></div>${sale.discount>0?`<div class="receipt-row"><span>Discount:</span><span>-${money(sale.discount)}</span></div>`:''}<div class="receipt-row" style="font-weight:700;font-size:14px"><span>TOTAL:</span><span>${money(sale.totalAmount)}</span></div><div class="receipt-row"><span>Payment:</span><span style="text-transform:capitalize">${sale.paymentMethod}</span></div><hr><div class="receipt-center" style="font-size:11px">Thank you for shopping with us!</div></div>`,`<button class="btn btn-outline btn-sm" onclick="closeModal();if(currentPage==='sales')renderSales()">Close</button>`);
+}
+
+// ── Export Service ───────────────────────────────────────────────────────────
+function exportToExcel(sales) {
+  if (!sales || sales.length === 0) { toast('No data to export', 'error'); return; }
+  const XLSX = window.XLSX;
+  const rows = sales.map(s => ({
+    'Receipt No':      s.receipt_no   || s.receiptNo   || '',
+    'Date':            s.date_str     || s.dateStr     || '',
+    'Cashier':         s.cashier_name || s.cashierName || '',
+    'Customer':        s.customer_name|| s.customerName|| '',
+    'Items':           s.items        || 0,
+    'Total Amount':    Number(s.total_amount || s.totalAmount || 0),
+    'Payment Method':  s.payment_method || s.paymentMethod || ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sales');
+  XLSX.writeFile(wb, `sales-export-${today()}.xlsx`);
+}
+
+function exportToPDF(sales) {
+  if (!sales || sales.length === 0) { toast('No data to export', 'error'); return; }
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: [80, 200] }); // thermal receipt width
-  const biz = (currentUser && currentUser.name) ? currentUser.name : 'Marble POS';
-  let y = 10;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const bizName = (currentUser && currentUser.name) ? currentUser.name : 'Marble POS';
+  const exportDate = today();
+  const total = sales.reduce((s, r) => s + Number(r.total_amount || r.totalAmount || 0), 0);
 
   // Header
-  doc.setFontSize(14); doc.setFont(undefined, 'bold');
-  doc.text(biz, 40, y, { align: 'center' }); y += 6;
-  doc.setFontSize(8); doc.setFont(undefined, 'normal');
-  doc.text('Grocery Inventory & POS', 40, y, { align: 'center' }); y += 5;
-  doc.text(new Date(sale.date || sale.created_at || Date.now()).toLocaleString(), 40, y, { align: 'center' }); y += 5;
-  doc.line(5, y, 75, y); y += 4;
+  doc.setFontSize(16);
+  doc.setFont(undefined, 'bold');
+  doc.text(bizName, 14, 18);
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'normal');
+  doc.text(`Sales Report — ${exportDate}`, 14, 26);
+  doc.text(`Total Sales: K${Number(total).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 14, 33);
 
-  // Sale info
+  // Table header
+  const cols = ['Receipt No', 'Date', 'Cashier', 'Customer', 'Items', 'Total Amount', 'Payment'];
+  const colWidths = [32, 26, 40, 40, 16, 34, 28];
+  let x = 14, y = 44;
+  doc.setFillColor(0, 122, 255);
+  doc.setTextColor(255, 255, 255);
   doc.setFontSize(9);
-  doc.text('Receipt: ' + (sale.receiptNo || sale.receipt_no), 5, y); y += 5;
-  doc.text('Cashier: ' + (sale.cashierName || sale.cashier_name || ''), 5, y); y += 5;
-  doc.text('Customer: ' + (sale.customerName || sale.customer_name || 'Walk-in'), 5, y); y += 4;
-  doc.line(5, y, 75, y); y += 4;
-
-  // Items
-  (items || []).forEach(i => {
-    doc.setFont(undefined, 'bold');
-    const name = (i.productName || i.product_name || '').substring(0, 28);
-    doc.text(name, 5, y); y += 4;
-    doc.setFont(undefined, 'normal');
-    const desc = i.variantDesc || i.variant_desc || '';
-    if (desc) { doc.text(desc, 5, y); y += 4; }
-    const lineTotal = 'K' + Number((i.qty || 1) * (i.price || 0)).toFixed(2);
-    doc.text(String(i.qty || 1) + ' x K' + Number(i.price || 0).toFixed(2), 5, y);
-    doc.text(lineTotal, 75, y, { align: 'right' }); y += 5;
+  doc.setFont(undefined, 'bold');
+  let cx = x;
+  cols.forEach((col, i) => {
+    doc.rect(cx, y - 5, colWidths[i], 8, 'F');
+    doc.text(col, cx + 2, y);
+    cx += colWidths[i];
   });
 
-  doc.line(5, y, 75, y); y += 4;
+  // Table rows
+  doc.setTextColor(0, 0, 0);
+  doc.setFont(undefined, 'normal');
+  y += 10;
+  sales.forEach((s, idx) => {
+    if (y > 185) { doc.addPage(); y = 20; }
+    if (idx % 2 === 0) { doc.setFillColor(242, 242, 247); let rx = x; colWidths.forEach(w => { doc.rect(rx, y - 5, w, 8, 'F'); rx += w; }); }
+    const rowData = [
+      s.receipt_no   || s.receiptNo   || '',
+      s.date_str     || s.dateStr     || '',
+      s.cashier_name || s.cashierName || '',
+      s.customer_name|| s.customerName|| '',
+      String(s.items || 0),
+      'K' + Number(s.total_amount || s.totalAmount || 0).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      s.payment_method || s.paymentMethod || ''
+    ];
+    let rx = x;
+    rowData.forEach((val, i) => {
+      const truncated = String(val).length > 18 ? String(val).slice(0, 16) + '…' : String(val);
+      doc.text(truncated, rx + 2, y);
+      rx += colWidths[i];
+    });
+    y += 9;
+  });
 
-  // Totals
-  const subtotal = (sale.totalAmount || sale.total_amount || 0) + (sale.discount || 0);
-  doc.text('Subtotal:', 5, y); doc.text('K' + Number(subtotal).toFixed(2), 75, y, { align: 'right' }); y += 5;
-  if ((sale.discount || 0) > 0) {
-    doc.text('Discount:', 5, y); doc.text('-K' + Number(sale.discount).toFixed(2), 75, y, { align: 'right' }); y += 5;
-  }
-  doc.setFont(undefined, 'bold'); doc.setFontSize(11);
-  doc.text('TOTAL:', 5, y); doc.text('K' + Number(sale.totalAmount || sale.total_amount || 0).toFixed(2), 75, y, { align: 'right' }); y += 5;
-  doc.setFont(undefined, 'normal'); doc.setFontSize(9);
-  doc.text('Payment: ' + (sale.paymentMethod || sale.payment_method || ''), 5, y); y += 5;
-  doc.line(5, y, 75, y); y += 4;
-  doc.text('Thank you for shopping with us!', 40, y, { align: 'center' });
-
-  return doc;
+  doc.save(`sales-report-${today()}.pdf`);
 }
-
-function downloadReceiptPDF(sale, items) {
-  const doc = generateReceiptPDF(sale, items);
-  if (doc) doc.save('receipt-' + (sale.receiptNo || sale.receipt_no) + '.pdf');
-}
-
-function shareReceiptWhatsApp(sale, items) {
-  const biz = (currentUser && currentUser.name) ? currentUser.name : 'Marble POS';
-  const receiptNo = sale.receiptNo || sale.receipt_no;
-  const total = 'K' + Number(sale.totalAmount || sale.total_amount || 0).toFixed(2);
-  const date = new Date(sale.date || Date.now()).toLocaleString();
-  const itemLines = (items || []).map(i =>
-    '  • ' + (i.productName || i.product_name) + ' x' + i.qty + ' = K' + Number((i.qty || 1) * (i.price || 0)).toFixed(2)
-  ).join('%0A');
-  const msg =
-    '*' + biz + ' — Receipt*%0A' +
-    '━━━━━━━━━━━━━━━━━━%0A' +
-    'Receipt: ' + receiptNo + '%0A' +
-    'Date: ' + date + '%0A' +
-    'Cashier: ' + (sale.cashierName || sale.cashier_name) + '%0A' +
-    '━━━━━━━━━━━━━━━━━━%0A' +
-    itemLines + '%0A' +
-    '━━━━━━━━━━━━━━━━━━%0A' +
-    '*TOTAL: ' + total + '*%0A' +
-    'Payment: ' + (sale.paymentMethod || sale.payment_method) + '%0A%0A' +
-    '_Thank you for shopping with us!_ 🛍️';
-
-  const phone = prompt('Enter customer WhatsApp number (e.g. 260971234567):');
-  if (!phone) return;
-  const digits = phone.replace(/\D/g, '');
-  window.open('https://wa.me/' + digits + '?text=' + msg, '_blank');
-}
-
-function showReceipt(sale) {
-  const items = DB.saleItems.filter(si => si.saleId === sale.id);
-  const receiptHTML = `
-    <div class="receipt">
-      <div class="receipt-center"><strong style="font-size:16px">MARBLE POS</strong><br>Grocery Inventory &amp; POS<br>${new Date(sale.date).toLocaleString()}</div>
-      <hr>
-      <div class="receipt-row"><span>Receipt:</span><span>${sale.receiptNo}</span></div>
-      <div class="receipt-row"><span>Cashier:</span><span>${sale.cashierName}</span></div>
-      <div class="receipt-row"><span>Customer:</span><span>${sale.customerName}</span></div>
-      <hr>
-      ${items.map(i => `
-        <div style="margin-bottom:6px">
-          <div style="font-weight:700">${i.productName}</div>
-          <div style="font-size:11px;color:#666">${i.variantDesc || ''}${i.serialNum ? ' | S/N: ' + i.serialNum : ''}</div>
-          <div class="receipt-row"><span>${i.qty} &times; ${money(i.price)}</span><span>${money(i.qty * i.price)}</span></div>
-        </div>`).join('')}
-      <hr>
-      <div class="receipt-row"><span>Subtotal:</span><span>${money(sale.totalAmount + sale.discount)}</span></div>
-      ${sale.discount > 0 ? `<div class="receipt-row"><span>Discount:</span><span>-${money(sale.discount)}</span></div>` : ''}
-      <div class="receipt-row" style="font-weight:700;font-size:14px"><span>TOTAL:</span><span>${money(sale.totalAmount)}</span></div>
-      <div class="receipt-row"><span>Payment:</span><span style="text-transform:capitalize">${sale.paymentMethod}</span></div>
-      <hr>
-      <div class="receipt-center" style="font-size:11px">Thank you for shopping with us!</div>
-    </div>`;
-
-  const footer = `
-    <button class="btn btn-outline btn-sm" onclick="downloadReceiptPDF(DB.sales.find(s=>s.id==='${sale.id}'),DB.saleItems.filter(i=>i.saleId==='${sale.id}'))"><i class="fas fa-file-pdf"></i> Download PDF</button>
-    <button class="btn btn-success btn-sm" onclick="shareReceiptWhatsApp(DB.sales.find(s=>s.id==='${sale.id}'),DB.saleItems.filter(i=>i.saleId==='${sale.id}'))"><i class="fab fa-whatsapp"></i> WhatsApp</button>
-    <button class="btn btn-outline btn-sm" onclick="closeModal();if(currentPage==='sales')renderSales()">Close</button>`;
-
-  openModal('Receipt — ' + sale.receiptNo, receiptHTML, footer);
-}
-
 
 function renderHistory(){
-  renderTopbarActions('<button class="btn btn-outline btn-sm" id="exportExcelBtn" data-role-min="manager"><i class="fas fa-file-excel"></i> Excel</button><button class="btn btn-outline btn-sm" id="exportPdfBtn" data-role-min="manager" style="margin-left:6px"><i class="fas fa-file-pdf"></i> PDF</button>');
+  renderTopbarActions(`
+    <button class="btn btn-outline btn-sm" id="exportExcelBtn" data-role-min="manager" style="display:none"><i class="fas fa-file-excel"></i> Export Excel</button>
+    <button class="btn btn-outline btn-sm" id="exportPdfBtn" data-role-min="manager" style="display:none"><i class="fas fa-file-pdf"></i> Export PDF</button>
+  `);
   $('mainContent').innerHTML=`<div class="fade-in"><div class="search-bar"><div class="form-group" style="margin:0"><label style="font-size:11px;margin-bottom:4px">Date</label><input type="date" class="form-input" id="histDate" value="${today()}" style="padding:8px 12px"></div><div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" id="histSearch" placeholder="Search by receipt or customer..."></div></div><div id="histStats" style="margin-bottom:16px"></div><div class="card"><div class="card-body np"><div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Time</th><th>Customer</th><th>Items</th><th>Amount</th><th>Payment</th><th>Cashier</th><th></th></tr></thead><tbody id="histBody"></tbody></table></div></div></div></div>`;
   renderHistTable();
   $('histDate').addEventListener('change',renderHistTable);
   $('histSearch').addEventListener('input',renderHistTable);
-  const _getHistSales=()=>{const date=$('histDate')?$('histDate').value:today();const q=($('histSearch')?$('histSearch').value:'').toLowerCase();return DB.sales.filter(s=>s.dateStr===date&&(!q||s.receiptNo.toLowerCase().includes(q)||s.customerName.toLowerCase().includes(q))).map(s=>({receipt_no:s.receiptNo,date_str:s.dateStr,cashier_name:s.cashierName,customer_name:s.customerName,items:s.items,total_amount:s.totalAmount,payment_method:s.paymentMethod}));};
-  setTimeout(()=>{if($('exportExcelBtn'))$('exportExcelBtn').addEventListener('click',()=>exportToExcel(_getHistSales()));if($('exportPdfBtn'))$('exportPdfBtn').addEventListener('click',()=>exportToPDF(_getHistSales()));if(currentUser)applyRoleGuards(currentUser.role);},50);
+  if ($('exportExcelBtn')) $('exportExcelBtn').addEventListener('click', () => {
+    const date = $('histDate') ? $('histDate').value : today();
+    const q = ($('histSearch') ? $('histSearch').value : '').toLowerCase();
+    const sales = DB.sales.filter(s => {
+      if (s.dateStr !== date) return false;
+      if (q && !s.receiptNo.toLowerCase().includes(q) && !s.customerName.toLowerCase().includes(q)) return false;
+      return true;
+    }).map(s => ({ receipt_no: s.receiptNo, date_str: s.dateStr, cashier_name: s.cashierName, customer_name: s.customerName, items: s.items, total_amount: s.totalAmount, payment_method: s.paymentMethod }));
+    exportToExcel(sales);
+  });
+  if ($('exportPdfBtn')) $('exportPdfBtn').addEventListener('click', () => {
+    const date = $('histDate') ? $('histDate').value : today();
+    const q = ($('histSearch') ? $('histSearch').value : '').toLowerCase();
+    const sales = DB.sales.filter(s => {
+      if (s.dateStr !== date) return false;
+      if (q && !s.receiptNo.toLowerCase().includes(q) && !s.customerName.toLowerCase().includes(q)) return false;
+      return true;
+    }).map(s => ({ receipt_no: s.receiptNo, date_str: s.dateStr, cashier_name: s.cashierName, customer_name: s.customerName, items: s.items, total_amount: s.totalAmount, payment_method: s.paymentMethod }));
+    exportToPDF(sales);
+  });
+  if (currentUser) applyRoleGuards(currentUser.role);
 }
 function renderHistTable(){
   const date=$('histDate')?$('histDate').value:today();
@@ -1398,7 +1382,7 @@ function renderHistTable(){
   }
 
   // ── Backend URL ──────────────────────────────────────────────────────────
-  const BACKEND = window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://your-backend.railway.app'; // TODO: replace with your deployed backend URL
+  const BACKEND = 'http://localhost:3000'; // change to deployed URL in production
 
   // ── Staff Manager ────────────────────────────────────────────────────────
   async function loadStaffList() {
@@ -1483,67 +1467,65 @@ function renderHistTable(){
     </tr>`).join('');
   }
 
-// ── Export Service ───────────────────────────────────────────────────────────
-function exportToExcel(sales) {
-  if (!sales || sales.length === 0) { toast('No data to export', 'error'); return; }
-  const XLSX = window.XLSX;
-  if (!XLSX) { toast('Excel library not loaded', 'error'); return; }
-  const rows = sales.map(s => ({
-    'Receipt No':     s.receipt_no    || s.receiptNo    || '',
-    'Date':           s.date_str      || s.dateStr      || '',
-    'Cashier':        s.cashier_name  || s.cashierName  || '',
-    'Customer':       s.customer_name || s.customerName || '',
-    'Items':          s.items         || 0,
-    'Total Amount':   Number(s.total_amount || s.totalAmount || 0),
-    'Payment Method': s.payment_method|| s.paymentMethod|| ''
-  }));
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Sales');
-  XLSX.writeFile(wb, 'sales-export-' + today() + '.xlsx');
-}
+  // ── Low Stock Monitor ────────────────────────────────────────────────────
+  let _lowStockIntervalId = null;
+  let _prevLowStockIds = new Set();
 
-function exportToPDF(sales) {
-  if (!sales || sales.length === 0) { toast('No data to export', 'error'); return; }
-  if (!window.jspdf) { toast('PDF library not loaded', 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'landscape' });
-  const bizName = (currentUser && currentUser.name) ? currentUser.name : 'Marble POS';
-  const total = sales.reduce((s, r) => s + Number(r.total_amount || r.totalAmount || 0), 0);
-  doc.setFontSize(16); doc.setFont(undefined, 'bold');
-  doc.text(bizName, 14, 18);
-  doc.setFontSize(10); doc.setFont(undefined, 'normal');
-  doc.text('Sales Report — ' + today(), 14, 26);
-  doc.text('Total: K' + Number(total).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 14, 33);
-  const cols = ['Receipt No', 'Date', 'Cashier', 'Customer', 'Items', 'Total', 'Payment'];
-  const colW = [32, 26, 40, 40, 16, 34, 28];
-  let y = 44;
-  doc.setFillColor(0, 122, 255); doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont(undefined, 'bold');
-  let cx = 14;
-  cols.forEach((col, i) => { doc.rect(cx, y - 5, colW[i], 8, 'F'); doc.text(col, cx + 2, y); cx += colW[i]; });
-  doc.setTextColor(0, 0, 0); doc.setFont(undefined, 'normal'); y += 10;
-  sales.forEach((s, idx) => {
-    if (y > 185) { doc.addPage(); y = 20; }
-    if (idx % 2 === 0) { doc.setFillColor(242, 242, 247); let rx = 14; colW.forEach(w => { doc.rect(rx, y - 5, w, 8, 'F'); rx += w; }); }
-    const row = [
-      s.receipt_no || s.receiptNo || '', s.date_str || s.dateStr || '',
-      s.cashier_name || s.cashierName || '', s.customer_name || s.customerName || '',
-      String(s.items || 0),
-      'K' + Number(s.total_amount || s.totalAmount || 0).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      s.payment_method || s.paymentMethod || ''
-    ];
-    let rx = 14;
-    row.forEach((val, i) => { const t = String(val).length > 18 ? String(val).slice(0, 16) + '…' : String(val); doc.text(t, rx + 2, y); rx += colW[i]; });
-    y += 9;
-  });
-  doc.save('sales-report-' + today() + '.pdf');
-}
-// ── Low Stock Monitor ────────────────────────────────────────────────────────
-var _lowStockIntervalId = null;
-var _prevLowStockIds = new Set();
+  function renderNotificationBanner(items) {
+    const banner = $('lowStockBanner');
+    if (!banner) return;
+    if (!items || items.length === 0) {
+      banner.style.display = 'none';
+      return;
+    }
+    const list = items.map(i => `${i.product_name} (${i.qty} left)`).join(' · ');
+    banner.innerHTML = `<i class="fas fa-triangle-exclamation" style="margin-right:8px"></i><strong>Low Stock Alert:</strong> ${list}`;
+    banner.style.display = 'block';
+  }
+
+  // Stub — full implementation in Task 9
+  function sendPushNotification(items) {}
+
+  async function checkLowStock() {
+    try {
+      const bizId = currentUser && currentUser.business_id;
+      let q = supabaseClient.from('variants').select('id, qty, product_id').lt('qty', 10);
+      if (bizId) q = q.eq('business_id', bizId);
+      const { data, error } = await q;
+      if (error) throw error;
+
+      // Enrich with product names
+      const items = (data || []).map(v => {
+        const p = getProduct(v.product_id || v.productId);
+        return { id: v.id, product_name: p ? p.name : v.id, qty: v.qty };
+      });
+
+      renderNotificationBanner(items);
+
+      // Compute diff — find newly low-stock items
+      const currentIds = new Set(items.map(i => i.id));
+      const newItems = items.filter(i => !_prevLowStockIds.has(i.id));
+      if (newItems.length > 0) sendPushNotification(newItems);
+      _prevLowStockIds = currentIds;
+    } catch (err) {
+      console.error('Low stock check failed:', err);
+    }
+  }
+
+  function startLowStockMonitor() {
+    checkLowStock();
+    _lowStockIntervalId = setInterval(checkLowStock, 5000);
+  }
+
+  function stopLowStockMonitor() {
+    if (_lowStockIntervalId !== null) {
+      clearInterval(_lowStockIntervalId);
+      _lowStockIntervalId = null;
+    }
+  }
 
 function renderNotificationBanner(items) {
-  const banner = document.getElementById('lowStockBanner');
+  const banner = $('lowStockBanner');
   if (!banner) return;
   if (!items || items.length === 0) {
     banner.style.display = 'none';
@@ -1551,8 +1533,8 @@ function renderNotificationBanner(items) {
     return;
   }
   const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const list = items.map(i => '<strong>' + esc(i.product_name) + '</strong> (' + i.qty + ' left)').join(' &nbsp;&middot;&nbsp; ');
-  banner.innerHTML = '<i class="fas fa-triangle-exclamation" style="margin-right:8px"></i>Low Stock: ' + list;
+  const list = items.map(i => `<strong>${esc(i.product_name)}</strong> (${i.qty} left)`).join(' &nbsp;·&nbsp; ');
+  banner.innerHTML = `<i class="fas fa-triangle-exclamation" style="margin-right:8px"></i>Low Stock: ${list}`;
   banner.style.display = 'block';
 }
 
@@ -1563,14 +1545,20 @@ async function checkLowStock() {
     if (bizId) q = q.eq('business_id', bizId);
     const { data, error } = await q;
     if (error) throw error;
+
+    // Enrich with product names
     const items = (data || []).map(v => {
       const p = getProduct(v.product_id);
       return { id: v.id, product_name: p ? p.name : v.product_id, qty: v.qty };
     });
+
     renderNotificationBanner(items);
+
+    // Diff: find newly low-stock items
     const currentIds = new Set(items.map(i => i.id));
     const newItems = items.filter(i => !_prevLowStockIds.has(i.id));
     _prevLowStockIds = currentIds;
+
     if (newItems.length > 0) sendPushNotification(newItems);
   } catch (err) {
     console.error('Low stock check failed:', err);
@@ -1578,7 +1566,7 @@ async function checkLowStock() {
 }
 
 function startLowStockMonitor() {
-  if (_lowStockIntervalId) return;
+  if (_lowStockIntervalId) return; // already running
   checkLowStock();
   _lowStockIntervalId = setInterval(checkLowStock, 5000);
 }
@@ -1587,125 +1575,8 @@ function stopLowStockMonitor() {
   if (_lowStockIntervalId) { clearInterval(_lowStockIntervalId); _lowStockIntervalId = null; }
 }
 
-// ── Push Notifications ───────────────────────────────────────────────────────
-var _pushPermission = null; // 'granted' | 'denied' | 'default' | null
-
-function requestPushPermission() {
-  if (!('Notification' in window)) return;
-  if (_pushPermission !== null) return; // already asked this session
-  Notification.requestPermission().then(result => { _pushPermission = result; });
-}
-
-function sendPushNotification(items) {
-  if (!('Notification' in window)) return;
-  if (_pushPermission !== 'granted') return;
-  if (!items || items.length === 0) return;
-  const body = items.map(i => i.product_name + ' (' + i.qty + ' left)').join(', ');
-  new Notification('Low Stock Alert ⚠️', { body, icon: 'marble-logo.png' });
-}
-
-// ── Subscription Check ───────────────────────────────────────────────────────
-async function checkAccess() {
-  try {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session) return;
-    const res = await fetch('/check-subscription', {
-      headers: { Authorization: 'Bearer ' + session.access_token }
-    });
-    if (!res.ok) return; // backend unreachable — allow access
-    const json = await res.json();
-    if (json.active === false) {
-      window.location.href = 'payment.html';
-    }
-  } catch (e) {
-    console.warn('checkAccess failed (offline?):', e);
-  }
-}
-
-// ── Audit Logging ────────────────────────────────────────────────────────────
-async function logAction(action, tableName, recordId) {
-  try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) return;
-    await supabaseClient.from('audit_logs').insert({
-      user_id: user.id,
-      action,
-      table_name: tableName,
-      record_id: recordId,
-      created_at: new Date().toISOString()
-    });
-  } catch (e) { console.warn('logAction failed:', e); }
-}
-
-// ── Referral System ──────────────────────────────────────────────────────────
-function generateReferralCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
-
-async function ensureReferralCode() {
-  if (!currentUser) return;
-  const { data: profile } = await supabaseClient.from('profiles').select('referral_code').eq('id', currentUser.id).single();
-  if (!profile || profile.referral_code) return; // already has one
-  const code = generateReferralCode();
-  await supabaseClient.from('profiles').update({ referral_code: code }).eq('id', currentUser.id);
-  currentUser.referral_code = code;
-}
-
-async function applyReferral(referredByCode) {
-  if (!referredByCode) return;
-  await supabaseClient.from('profiles').update({ referred_by: referredByCode }).eq('id', currentUser.id);
-  // Trigger trial extension via RPC if it exists
-  try { await supabaseClient.rpc('extend_trial', { code: referredByCode }); } catch(e) {}
-}
-
-// ── Barcode Scanner ──────────────────────────────────────────────────────────
-var _scannerActive = false;
-
-function openBarcodeScanner() {
-  if (!window.Quagga) { toast('Scanner not available', 'error'); return; }
-  openModal('Barcode Scanner', `
-    <div id="scannerContainer" style="position:relative;width:100%;max-width:400px;margin:0 auto">
-      <div id="interactive" class="viewport" style="width:100%;height:280px;overflow:hidden;border-radius:var(--rs);background:#000"></div>
-      <div style="text-align:center;margin-top:12px;color:var(--tx2);font-size:13px">Point camera at barcode</div>
-      <div id="scanResult" style="text-align:center;margin-top:8px;font-weight:700;font-size:15px;color:var(--ac)"></div>
-    </div>`, '<button class="btn btn-outline btn-sm" onclick="closeBarcodeScanner()">Close</button>');
-
-  setTimeout(() => {
-    _scannerActive = true;
-    Quagga.init({
-      inputStream: { type: 'LiveStream', target: document.querySelector('#interactive'), constraints: { facingMode: 'environment' } },
-      decoder: { readers: ['code_128_reader', 'ean_reader', 'ean_8_reader', 'code_39_reader', 'upc_reader'] }
-    }, err => {
-      if (err) { toast('Camera access denied', 'error'); return; }
-      Quagga.start();
-    });
-
-    Quagga.onDetected(result => {
-      const code = result.codeResult.code;
-      if (!code) return;
-      document.getElementById('scanResult').textContent = '✓ ' + code;
-      Quagga.stop(); _scannerActive = false;
-      setTimeout(() => {
-        closeModal();
-        // Search POS grid for matching SKU
-        const match = DB.variants.find(v => v.sku === code);
-        if (match) {
-          const p = getProduct(match.productId);
-          if (p) { selectProductForCart(p.id); toast('Product added: ' + p.name, 'success'); }
-          else toast('SKU found but product missing', 'error');
-        } else {
-          toast('No product found for: ' + code, 'error');
-        }
-      }, 600);
-    });
-  }, 300);
-}
-
-function closeBarcodeScanner() {
-  if (_scannerActive && window.Quagga) { try { Quagga.stop(); } catch(e) {} _scannerActive = false; }
-  closeModal();
-}
-
+// stub — real implementation in Task 9
+function sendPushNotification(items) {}
 
   async function startApp(){
     // Register service worker for offline PWA support
@@ -1720,7 +1591,7 @@ function closeBarcodeScanner() {
     syncOfflineQueue();
     const restored=await restoreSession();
     if(restored){
-      if(['admin','manager'].includes(currentUser.role)) { startLowStockMonitor(); requestPushPermission(); }
+      if(['admin','manager'].includes(currentUser.role)) startLowStockMonitor();
       if(!currentUser.onboarding_completed) showOnboarding();
       return;
     }
@@ -1733,9 +1604,8 @@ function closeBarcodeScanner() {
         $('appShell').classList.add('active');
         renderSidebar();
         navigate('dashboard');
-        checkAccess();
-        ensureReferralCode();
-        if(['admin','manager'].includes(currentUser.role)) { startLowStockMonitor(); requestPushPermission(); }
+        if(['admin','manager'].includes(currentUser.role)) startLowStockMonitor();
+        if(currentUser.role==='admin'||currentUser.role==='manager') startLowStockMonitor();
       }else{
         $('loginError').textContent='Invalid email or password';
         $('loginError').style.display='block';
