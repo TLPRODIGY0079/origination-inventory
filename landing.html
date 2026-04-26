@@ -6,7 +6,7 @@
 <script src="supabase.js"></script>
 <script>
 (async()=>{
-  const _sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
+  const _sc=window.supabase.createClient('https://ydogahzvieaunitxaoim.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlkb2dhaHp2aWVhdW5pdHhhb2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMzQwOTksImV4cCI6MjA5MjgxMDA5OX0.l4ZlXqeASYruZ1dZ7ZZ3QRAxFlBl6vrzU_SYYH8-eiQ');
   const{data}=await _sc.auth.getSession();
   if(data?.session) window.location.replace('index.html');
 })();
