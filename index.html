@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#007AFF">
+<meta name="theme-color" content="#D4AF37">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -18,7 +18,7 @@
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StoreVault — Grocery Inventory & POS</title>
+<title>Origination-Inventory — Grocery Inventory & POS</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <style>
@@ -26,7 +26,9 @@
 :root{
   --bg:#F2F2F7;--bg2:#FFF;--bg3:#E5E5EA;--bg4:#F9F9FB;
   --tx:#1C1C1E;--tx2:#636366;--tx3:#AEAEB2;
-  --ac:#007AFF;--ac2:#0056B3;--ac3:rgba(0,122,255,.12);
+  --primary-white:#FFFFFF;--accent-gold:#D4AF37;--primary-black:#000000;
+  --ac:var(--accent-gold);--ac2:#B8941F;--ac3:rgba(212,175,55,.12);
+  --wave-gradient:linear-gradient(45deg,var(--accent-gold),var(--primary-white));
   --gn:#34C759;--gn2:rgba(52,199,89,.12);
   --wn:#FF9500;--wn2:rgba(255,149,0,.12);
   --dn:#FF3B30;--dn2:rgba(255,59,48,.12);
@@ -38,7 +40,7 @@
 .dark{
   --bg:#000;--bg2:#1C1C1E;--bg3:#2C2C2E;--bg4:#1C1C1E;
   --tx:#F2F2F7;--tx2:#8E8E93;--tx3:#48484A;
-  --ac:#0A84FF;--ac2:#409CFF;--ac3:rgba(10,132,255,.18);
+  --ac:var(--accent-gold);--ac2:#B8941F;--ac3:rgba(212,175,55,.18);
   --bd:#38383A;--sh:0 2px 12px rgba(0,0,0,.3);--sh2:0 8px 30px rgba(0,0,0,.5);
   --gn2:rgba(52,199,89,.18);--wn2:rgba(255,149,0,.18);--dn2:rgba(255,59,48,.18);
 }
@@ -50,7 +52,7 @@ a{color:var(--ac);text-decoration:none}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
 
-#loginScreen{position:fixed;inset:0;background:url('marble-logo.jpg') center/cover no-repeat,linear-gradient(135deg,#1a1a1a 0%,#2d2d2d 100%);display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity .5s,transform .5s}
+#loginScreen{position:fixed;inset:0;background:url('assets/logos/origination-logo.png') center/cover no-repeat,linear-gradient(135deg,#1a1a1a 0%,#2d2d2d 100%);display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity .5s,transform .5s}
 #loginScreen.hidden{opacity:0;pointer-events:none;transform:scale(1.05)}
 .login-card{background:var(--bg2);border-radius:24px;padding:48px 40px;width:380px;max-width:90vw;box-shadow:var(--sh2);text-align:center}
 .login-logo{width:64px;height:64px;background:var(--ac);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px;color:#fff}
@@ -62,7 +64,7 @@ a{color:var(--ac);text-decoration:none}
 .form-input:focus{border-color:var(--ac);box-shadow:0 0 0 3px var(--ac3)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 24px;border:none;border-radius:var(--rs);font-size:15px;font-weight:600;cursor:pointer;transition:all .2s;outline:none}
 .btn-primary{background:var(--ac);color:#fff;width:100%}
-.btn-primary:hover{background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,122,255,.3)}
+.btn-primary:hover{background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 12px rgba(212,175,55,.3)}
 .btn-sm{padding:8px 16px;font-size:13px;border-radius:8px}
 .btn-outline{background:transparent;border:1.5px solid var(--bd);color:var(--tx)}
 .btn-outline:hover{border-color:var(--ac);color:var(--ac);background:var(--ac3)}
@@ -160,7 +162,7 @@ tr:hover td{background:var(--bg)}
 .toast.show{transform:translateX(0)}
 .toast-success{background:#34C759}
 .toast-error{background:#FF3B30}
-.toast-info{background:#007AFF}
+.toast-info{background:var(--accent-gold)}
 
 .pos-layout{display:grid;grid-template-columns:1fr 380px;gap:20px;height:calc(100vh - var(--header) - 48px)}
 .pos-products{overflow-y:auto}
@@ -235,14 +237,39 @@ tr:hover td{background:var(--bg)}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .fade-in{animation:fadeIn .35s ease}
 .clickable{cursor:pointer;user-select:none}
+
+/* Wave Form Design Elements */
+@keyframes waveFlow{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.wave-divider{height:3px;background:linear-gradient(90deg,transparent,var(--accent-gold),transparent);position:relative;overflow:hidden}
+.wave-divider::before{content:'';position:absolute;top:0;left:0;right:0;height:100%;background:repeating-linear-gradient(90deg,var(--accent-gold) 0px,transparent 10px,transparent 20px,var(--accent-gold) 30px);animation:waveFlow 2s linear infinite}
+.wave-border{border:2px solid transparent;background:linear-gradient(var(--bg2),var(--bg2)) padding-box,linear-gradient(45deg,var(--accent-gold),var(--primary-white),var(--accent-gold)) border-box;border-radius:var(--r)}
+.wave-accent-border{border-bottom:3px solid var(--accent-gold);position:relative}
+.wave-accent-border::after{content:'';position:absolute;bottom:-3px;left:0;width:60px;height:3px;background:var(--accent-gold);filter:blur(4px)}
+.wave-btn{position:relative;overflow:hidden}
+.wave-btn::before{content:'';position:absolute;top:50%;left:50%;width:0;height:0;border-radius:50%;background:rgba(212,175,55,.3);transform:translate(-50%,-50%);transition:width .6s,height .6s}
+.wave-btn:hover::before{width:300px;height:300px}
+.wave-loading{display:inline-block;width:40px;height:40px;position:relative}
+.wave-loading::after{content:'';position:absolute;width:100%;height:100%;border-radius:50%;border:4px solid var(--accent-gold);border-color:var(--accent-gold) transparent var(--accent-gold) transparent;animation:waveRotate 1.2s linear infinite}
+@keyframes waveRotate{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+.wave-shimmer{background:linear-gradient(90deg,var(--bg2) 0%,var(--accent-gold) 50%,var(--bg2) 100%);background-size:200% 100%;animation:shimmer 2s infinite}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.s-wave-pattern{clip-path:path('M0,50 Q25,30 50,50 T100,50 L100,100 L0,100 Z')}
+
+/* Wave Gradient Utility Classes */
+.wave-gradient{background:var(--wave-gradient)}
+.wave-gradient-border{border:2px solid transparent;background:linear-gradient(var(--bg2),var(--bg2)) padding-box,var(--wave-gradient) border-box}
+.wave-gradient-text{background:var(--wave-gradient);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+.wave-accent{color:var(--accent-gold)}
+.wave-bg{background-color:var(--accent-gold)}
+.wave-border{border-color:var(--accent-gold)}
 </style>
 </head>
 <body>
 
 <div id="loginScreen">
   <div class="login-card">
-    <div class="login-logo" style="background:none;padding:0;width:auto;height:auto"><img src="marble-logo.png" alt="Marble" style="width:120px;height:auto"></div>
-    <h1>Marble POS</h1>
+    <div class="login-logo" style="background:none;padding:0;width:auto;height:auto"><img src="assets/logos/origination-logo.png" alt="Origination" style="width:120px;height:auto"></div>
+    <h1>Origination-Inventory</h1>
     <p>Inventory & Point of Sale System</p>
     <div class="form-group">
       <label>Email</label>
@@ -261,8 +288,8 @@ tr:hover td{background:var(--bg)}
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <aside class="sidebar" id="sidebar">
   <div class="sidebar-brand">
-  <div class="icon" style="background:none;padding:0"><img src="marble-logo.png" alt="M" style="width:40px;height:40px;object-fit:contain;border-radius:8px"></div>
-  <div><h2>Marble POS</h2><span>Retail & Grocery POS</span></div>
+  <div class="icon" style="background:none;padding:0"><img src="assets/logos/origination-logo.png" alt="O" style="width:40px;height:40px;object-fit:contain;border-radius:8px"></div>
+  <div><h2>Origination-Inventory</h2><span>Retail & Grocery POS</span></div>
 </div>
     <nav class="sidebar-nav" id="sidebarNav"></nav>
     <div class="sidebar-user" id="sidebarUser"></div>
@@ -338,7 +365,7 @@ const IDB = (() => {
   function open() {
     if (_db) return Promise.resolve(_db);
     return new Promise((res, rej) => {
-      const req = indexedDB.open('marble_offline', 1);
+      const req = indexedDB.open('origination_inventory_offline', 1);
       req.onupgradeneeded = e => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id' });
@@ -862,7 +889,7 @@ function renderRevenueChart(weekData) {
   if (_revenueChart) { _revenueChart.destroy(); _revenueChart = null; }
   const canvas = document.getElementById('revenueChart');
   if (!canvas) return;
-  const acColor = getComputedStyle(document.documentElement).getPropertyValue('--ac').trim() || '#007AFF';
+  const acColor = getComputedStyle(document.documentElement).getPropertyValue('--ac').trim() || '#D4AF37';
   _revenueChart = new Chart(canvas, {
     type: 'bar',
     data: {
@@ -1179,7 +1206,7 @@ function exportToPDF(sales) {
   if (!sales || sales.length === 0) { toast('No data to export', 'error'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape' });
-  const bizName = (currentUser && currentUser.name) ? currentUser.name : 'Marble POS';
+  const bizName = (currentUser && currentUser.name) ? currentUser.name : 'Origination-Inventory';
   const exportDate = today();
   const total = sales.reduce((s, r) => s + Number(r.total_amount || r.totalAmount || 0), 0);
 
@@ -1354,7 +1381,7 @@ function renderHistTable(){
 
   function showOnboarding(){
     $('appShell').classList.remove('active');
-    openModal('Welcome to Marble POS 👋',
+    openModal('Welcome to Origination-Inventory 👋',
       `<div style="text-align:center;margin-bottom:20px"><div style="font-size:48px">🏪</div><p style="color:var(--tx2);font-size:14px;margin-top:8px">Let's set up your store in 30 seconds</p></div>
        <div class="form-group"><label>Business / Shop Name</label><input class="form-input" id="obBizName" placeholder="e.g. Chanda's Grocery"></div>
        <div class="form-group"><label>Your Role</label><select class="form-input" id="obRole"><option value="admin">Owner / Admin</option><option value="manager">Manager</option></select></div>`,
@@ -1374,7 +1401,7 @@ function renderHistTable(){
         $('modalClose').style.display='';
         closeModal();
         $('appShell').classList.add('active');
-        toast('Welcome to Marble POS! 🎉','success');
+        toast('Welcome to Origination-Inventory! 🎉','success');
         renderSidebar();
         navigate('dashboard');
       });

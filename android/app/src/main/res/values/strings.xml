@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">TLPINVENTORIES</string>
-    <string name="title_activity_main">TLPINVENTORIES</string>
-    <string name="package_name">com.tlp.inventories</string>
-    <string name="custom_url_scheme">com.tlp.inventories</string>
+    <string name="app_name">Origination-Inventory</string>
+    <string name="title_activity_main">Origination-Inventory</string>
+    <string name="package_name">com.origination.inventory</string>
+    <string name="custom_url_scheme">com.origination.inventory</string>
 </resources>

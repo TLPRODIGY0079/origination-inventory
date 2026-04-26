@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Migration: 001_rls_policies.sql
--- Description: Apply RLS policies and helper functions for Marble POS
+-- Description: Apply RLS policies and helper functions for Origination-stores
 -- Apply this in the Supabase SQL editor (or via supabase db push)
 -- =============================================================================
 

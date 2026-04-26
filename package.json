@@ -1,7 +1,7 @@
 {
-  "name": "another-inveentory-system",
-  "version": "1.0.0",
-  "description": "",
+  "name": "origination-inventory",
+  "version": "2.0.0",
+  "description": "Point of Sale and Inventory Management System for Origination stores",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -11,8 +11,8 @@
     "type": "git",
     "url": "git+https://github.com/TLPRODIGY0079/TLPINVENTORIES.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["pos", "inventory", "origination", "retail", "grocery"],
+  "author": "Origination",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {

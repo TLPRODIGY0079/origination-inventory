@@ -20,7 +20,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), handleStripeWebh
 
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'Marble POS Backend', version: '1.0.0' });
+  res.json({ status: 'ok', service: 'Origination-stores Backend', version: '1.0.0' });
 });
 
 
@@ -82,7 +82,7 @@ app.post('/mtn-initiate', async (req, res) => {
           partyIdType: 'MSISDN',
           partyId: phone.replace(/\D/g, '') // digits only e.g. 260971234567
         },
-        payerMessage: 'Marble POS — Pro Plan subscription',
+        payerMessage: 'Origination-stores — Pro Plan subscription',
         payeeNote:    `Upgrade to ${plan || 'pro'} plan`
       },
       {
@@ -175,8 +175,8 @@ app.post('/create-checkout-session', async (req, res) => {
   if (!userId || !email) return res.status(400).json({ error: 'userId and email required' });
 
   const PRICES = {
-    pro:        { amount: 29900, name: 'Marble POS — Pro Plan',        interval: 'month' },
-    enterprise: { amount: 79900, name: 'Marble POS — Enterprise Plan', interval: 'month' }
+    pro:        { amount: 29900, name: 'Origination-stores — Pro Plan',        interval: 'month' },
+    enterprise: { amount: 79900, name: 'Origination-stores — Enterprise Plan', interval: 'month' }
   };
   const p = PRICES[plan] || PRICES.pro;
 
@@ -358,24 +358,24 @@ app.post('/send-weekly-report', async (req, res) => {
 
     const html = `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-        <h2 style="color:#007AFF">📊 Weekly Sales Report — ${business?.name || 'Your Business'}</h2>
+        <h2 style="color:#D4AF37">📊 Weekly Sales Report — ${business?.name || 'Your Business'}</h2>
         <p>Here's your sales summary for the past 7 days:</p>
         <div style="background:#f2f2f7;border-radius:12px;padding:20px;margin:16px 0">
-          <div style="font-size:28px;font-weight:800;color:#007AFF">K${formatted}</div>
+          <div style="font-size:28px;font-weight:800;color:#D4AF37">K${formatted}</div>
           <div style="color:#636366;margin-top:4px">${totalSales} sales this week</div>
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead><tr style="background:#007AFF;color:#fff"><th style="padding:8px">Date</th><th style="padding:8px">Cashier</th><th style="padding:8px">Amount</th></tr></thead>
+          <thead><tr style="background:#D4AF37;color:#fff"><th style="padding:8px">Date</th><th style="padding:8px">Cashier</th><th style="padding:8px">Amount</th></tr></thead>
           <tbody>${rows || '<tr><td colspan="3" style="text-align:center;padding:16px;color:#999">No sales this week</td></tr>'}</tbody>
         </table>
-        <p style="color:#999;font-size:12px;margin-top:24px">Marble POS — automated weekly report</p>
+        <p style="color:#999;font-size:12px;margin-top:24px">Origination-stores — automated weekly report</p>
       </div>`;
 
     // Send via Resend
     const { Resend } = require('resend');
     const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'reports@marblepos.app',
+      from: process.env.RESEND_FROM_EMAIL || 'reports@origination-stores.app',
       to: ownerEmail,
       subject: `Weekly Sales Report — ${business?.name || 'Your Business'}`,
       html
@@ -388,7 +388,7 @@ app.post('/send-weekly-report', async (req, res) => {
   }
 });
 app.listen(process.env.PORT || 3000, () =>
-  console.log(`Marble POS backend running on port ${process.env.PORT || 3000}`)
+  console.log(`Origination-stores backend running on port ${process.env.PORT || 3000}`)
 );
 
 // =============================================================================

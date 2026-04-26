@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.tlp.inventories',
-  appName: 'TLPINVENTORIES',
+  appId: 'com.origination.inventory',
+  appName: 'Origination-Inventory',
   webDir: '.'
 };
 

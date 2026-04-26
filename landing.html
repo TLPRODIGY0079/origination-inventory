@@ -12,18 +12,18 @@
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Marble POS — Retail & Grocery Point of Sale</title>
+<title>Origination-Inventory — Retail & Grocery Point of Sale</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-:root{--ac:#007AFF;--ac2:#0056B3;--gn:#34C759;--dn:#FF3B30;--wn:#FF9500;--tx:#1C1C1E;--tx2:#636366;--bg:#F2F2F7;--bg2:#fff;--bd:#D1D1D6}
+:root{--primary-white:#FFFFFF;--accent-gold:#D4AF37;--primary-black:#000000;--ac:var(--accent-gold);--ac2:#B8941F;--gn:#34C759;--dn:#FF3B30;--wn:#FF9500;--tx:#1C1C1E;--tx2:#636366;--bg:#F2F2F7;--bg2:#fff;--bd:#D1D1D6}
 html{font-size:16px;scroll-behavior:smooth}
 body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:var(--tx);background:var(--bg2)}
 a{color:var(--ac);text-decoration:none}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 28px;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit}
 .btn-primary{background:var(--ac);color:#fff}
-.btn-primary:hover{background:var(--ac2);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,122,255,.3)}
+.btn-primary:hover{background:var(--ac2);transform:translateY(-2px);box-shadow:0 8px 24px rgba(212,175,55,.3)}
 .btn-outline{background:transparent;border:2px solid var(--bd);color:var(--tx)}
 .btn-outline:hover{border-color:var(--ac);color:var(--ac)}
 .btn-lg{padding:18px 36px;font-size:17px;border-radius:14px}
@@ -71,7 +71,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(255,255,255,
 /* PRICING */
 .pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:48px;max-width:900px;margin-left:auto;margin-right:auto}
 .price-card{background:var(--bg);border-radius:20px;padding:32px;border:2px solid transparent;transition:all .2s;position:relative}
-.price-card.featured{background:#fff;border-color:var(--ac);box-shadow:0 12px 40px rgba(0,122,255,.15)}
+.price-card.featured{background:#fff;border-color:var(--ac);box-shadow:0 12px 40px rgba(212,175,55,.15)}
 .price-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--ac);color:#fff;padding:4px 16px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap}
 .price-plan{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--tx2);margin-bottom:8px}
 .price-amount{font-size:42px;font-weight:800;margin-bottom:4px}
@@ -112,8 +112,8 @@ footer img{height:28px}
 
 <nav>
   <div class="nav-logo">
-    <img src="marble-logo.png" alt="Marble">
-    <span>Marble POS</span>
+    <img src="assets/logos/origination-logo.png" alt="Origination">
+    <span>Origination-Inventory</span>
   </div>
   <div class="nav-links">
     <a href="#features">Features</a>
@@ -131,7 +131,7 @@ footer img{height:28px}
   <div>
     <div class="hero-badge"><i class="fas fa-bolt"></i> Built for African Retail</div>
     <h1>The POS System Your<br><span>Store Actually Needs</span></h1>
-    <p>Marble POS handles your inventory, sales, and analytics — all in one place. No complexity, no monthly surprises.</p>
+    <p>Origination-Inventory handles your inventory, sales, and analytics — all in one place. No complexity, no monthly surprises.</p>
     <div class="hero-btns">
       <a href="signup.html" class="btn btn-primary btn-lg"><i class="fas fa-arrow-right"></i> Start Free Today</a>
       <a href="#features" class="btn btn-outline btn-lg"><i class="fas fa-play"></i> See Features</a>
@@ -151,7 +151,7 @@ footer img{height:28px}
 <section class="section" id="features">
   <div class="section-label">Features</div>
   <div class="section-title">Everything you need to run your store</div>
-  <p class="section-sub">From the till to the stockroom — Marble POS covers it all without the enterprise price tag.</p>
+  <p class="section-sub">From the till to the stockroom — Origination-Inventory covers it all without the enterprise price tag.</p>
   <div class="features-grid">
     <div class="feature-card">
       <div class="feature-icon blue"><i class="fas fa-cash-register"></i></div>
@@ -251,7 +251,7 @@ footer img{height:28px}
   <div class="testi-grid">
     <div class="testi-card">
       <div class="testi-stars"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i></div>
-      <p class="testi-text">"We switched from a paper book to Marble POS in one afternoon. Now I can see exactly what's selling and what's sitting on the shelf."</p>
+      <p class="testi-text">"We switched from a paper book to Origination-Inventory in one afternoon. Now I can see exactly what's selling and what's sitting on the shelf."</p>
       <div class="testi-author"><div class="testi-avatar">CM</div><div><div class="testi-name">Chanda Mwale</div><div class="testi-role">Owner, Chanda's Grocery — Lusaka</div></div></div>
     </div>
     <div class="testi-card">
@@ -270,13 +270,13 @@ footer img{height:28px}
 <!-- CTA -->
 <section class="cta-section">
   <h2>Ready to take control of your store?</h2>
-  <p>Join hundreds of retailers already using Marble POS. Start free — no credit card needed.</p>
-  <a href="signup.html" class="btn btn-primary btn-lg"><i class="fas fa-arrow-right"></i> Open Marble POS</a>
+  <p>Join hundreds of retailers already using Origination-Inventory. Start free — no credit card needed.</p>
+  <a href="signup.html" class="btn btn-primary btn-lg"><i class="fas fa-arrow-right"></i> Open Origination-Inventory</a>
 </section>
 
 <footer>
-  <div class="logo"><img src="marble-logo.png" alt="Marble"> Marble POS</div>
-  <div>© 2025 Marble POS. Built for African retail.</div>
+  <div class="logo"><img src="assets/logos/origination-logo.png" alt="Origination"> Origination-Inventory</div>
+  <div>© 2025 Origination-Inventory. Built for African retail.</div>
   <div><a href="login.html" style="color:rgba(255,255,255,.6)">Sign In</a></div>
 </footer>
 

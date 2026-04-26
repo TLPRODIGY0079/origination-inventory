@@ -1,0 +1,163 @@
+=================================================================
+ORIGINATION-INVENTORY - DEPLOYMENT COMMANDS
+=================================================================
+
+STEP 1: CREATE GITHUB REPOSITORY
+---------------------------------
+1. Go to: https://github.com/new
+2. Repository name: origination-inventory
+3. Description: Point of Sale and Inventory Management System
+4. Visibility: Public or Private (your choice)
+5. DO NOT check any initialization boxes
+6. Click "Create repository"
+7. Copy your repository URL
+
+
+STEP 2: PUSH TO GITHUB
+-----------------------
+Run these commands in your terminal:
+
+git status
+git add .
+git commit -m "Complete Origination-Inventory rebrand"
+git remote remove origin
+git remote add origin https://github.com/YOUR_USERNAME/origination-inventory.git
+git branch -M main
+git push -u origin main
+
+(Replace YOUR_USERNAME with your actual GitHub username!)
+
+
+STEP 3: DEPLOY TO NETLIFY (Dashboard Method)
+---------------------------------------------
+1. Go to: https://app.netlify.com
+2. Click "Add new site"
+3. Click "Import an existing project"
+4. Click "Deploy with GitHub"
+5. Select "origination-inventory" repository
+6. Configure:
+   - Branch: main
+   - Build command: (leave empty)
+   - Publish directory: .
+7. Click "Deploy site"
+8. Wait 1-2 minutes
+9. Click "Open production deploy"
+
+
+STEP 4: CONFIGURE SITE NAME
+----------------------------
+1. In Netlify dashboard, click "Site settings"
+2. Click "Change site name"
+3. Enter: origination-inventory
+4. Save
+5. Your URL: https://origination-inventory.netlify.app
+
+
+STEP 5: UPDATE SUPABASE CORS
+-----------------------------
+1. Go to: https://app.supabase.com
+2. Select your project
+3. Settings → API → CORS Settings
+4. Add: https://origination-inventory.netlify.app
+5. Click "Save"
+
+
+STEP 6: UPDATE ELECTRON APP (Optional)
+---------------------------------------
+Edit main.js line 13:
+
+win.loadURL('https://origination-inventory.netlify.app');
+
+Then push:
+git add main.js
+git commit -m "Update Electron URL"
+git push origin main
+
+
+=================================================================
+ALTERNATIVE: NETLIFY CLI METHOD
+=================================================================
+
+npm install -g netlify-cli
+netlify login
+netlify init
+netlify deploy --prod
+
+
+=================================================================
+VERIFICATION
+=================================================================
+
+Visit: https://origination-inventory.netlify.app
+
+Check:
+✓ Logo displays (gold and black)
+✓ Colors correct (white, gold, black - no blue)
+✓ Login page works
+✓ Navigation works
+✓ No console errors
+
+
+=================================================================
+AUTOMATIC DEPLOYMENTS
+=================================================================
+
+Every push to GitHub automatically deploys:
+
+git add .
+git commit -m "Your changes"
+git push origin main
+
+Netlify deploys automatically!
+
+
+=================================================================
+TROUBLESHOOTING
+=================================================================
+
+Problem: 404 errors
+Solution: netlify.toml file handles this (already included)
+
+Problem: Assets not loading
+Solution: Check paths are relative (assets/logos/...)
+
+Problem: Supabase connection fails
+Solution: Add Netlify URL to Supabase CORS settings
+
+Problem: Old version showing
+Solution: Clear cache (Ctrl+Shift+R) and check deploy status
+
+
+=================================================================
+DOCUMENTATION FILES
+=================================================================
+
+START_HERE.md - Quick start guide
+NETLIFY_QUICKSTART.md - 5-minute deployment
+NETLIFY_VISUAL_GUIDE.md - Step-by-step with screenshots
+DEPLOYMENT_GUIDE.md - Complete reference
+REBRAND_SUMMARY.md - Rebrand completion summary
+TESTING_CHECKLIST.md - Testing procedures
+PERFORMANCE_GUIDE.md - Performance testing
+
+
+=================================================================
+SUPPORT
+=================================================================
+
+Netlify Docs: https://docs.netlify.com
+Netlify Community: https://answers.netlify.com
+GitHub Docs: https://docs.github.com
+
+
+=================================================================
+YOUR LIVE SITE
+=================================================================
+
+After deployment, your site will be live at:
+https://origination-inventory.netlify.app
+
+Share this URL with your users!
+
+
+=================================================================

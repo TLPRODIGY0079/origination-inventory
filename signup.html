@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Create Account — Marble POS</title>
+<title>Create Account — Origination-Inventory</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="https://vercel.com/insights/script.js"></script>
 <script src="supabase.js"></script>
@@ -19,7 +19,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-:root{--ac:#007AFF;--ac2:#0056B3;--ac3:rgba(0,122,255,.1);--gn:#34C759;--dn:#FF3B30;--wn:#FF9500;--tx:#1C1C1E;--tx2:#636366;--bg:#F2F2F7;--bg2:#fff;--bd:#D1D1D6;--sh:0 2px 12px rgba(0,0,0,.06);--sh2:0 8px 40px rgba(0,0,0,.12)}
+:root{--primary-white:#FFFFFF;--accent-gold:#D4AF37;--primary-black:#000000;--ac:var(--accent-gold);--ac2:#B8941F;--ac3:rgba(212,175,55,.1);--gn:#34C759;--dn:#FF3B30;--wn:#FF9500;--tx:#1C1C1E;--tx2:#636366;--bg:#F2F2F7;--bg2:#fff;--bd:#D1D1D6;--sh:0 2px 12px rgba(0,0,0,.06);--sh2:0 8px 40px rgba(0,0,0,.12)}
 html{font-size:16px}
 body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:var(--tx);background:linear-gradient(135deg,#f0f7ff 0%,#fff 60%,#f0fff4 100%);min-height:100vh;display:flex;flex-direction:column}
 input,select,button{font-family:inherit;font-size:16px}
@@ -84,7 +84,7 @@ nav{height:64px;padding:0 5vw;display:flex;align-items:center;justify-content:sp
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 24px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;width:100%}
 .btn-primary{background:var(--ac);color:#fff}
-.btn-primary:hover:not(:disabled){background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,122,255,.3)}
+.btn-primary:hover:not(:disabled){background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(212,175,55,.3)}
 .btn-primary:disabled{opacity:.6;cursor:not-allowed;transform:none}
 .btn-outline{background:transparent;border:1.5px solid var(--bd);color:var(--tx)}
 .btn-outline:hover{border-color:var(--ac);color:var(--ac)}
@@ -97,8 +97,8 @@ nav{height:64px;padding:0 5vw;display:flex;align-items:center;justify-content:sp
 
 <nav>
   <a class="nav-logo" href="landing.html">
-    <img src="marble-logo.png" alt="Marble">
-    <span>Marble POS</span>
+    <img src="assets/logos/origination-logo.png" alt="Origination">
+    <span>Origination-Inventory</span>
   </a>
   <div class="nav-signin">Already have an account? <a href="login.html">Sign in</a></div>
 </nav>
@@ -110,7 +110,7 @@ nav{height:64px;padding:0 5vw;display:flex;align-items:center;justify-content:sp
     <div class="side-panel">
       <div>
         <h2>Run your store smarter 🚀</h2>
-        <p>Join hundreds of retailers across Zambia using Marble POS to manage inventory, process sales, and grow their business.</p>
+        <p>Join hundreds of retailers across Zambia using Origination-Inventory to manage inventory, process sales, and grow their business.</p>
         <div class="side-features">
           <div class="side-feat"><i class="fas fa-cash-register"></i> Fast POS checkout — process sales in seconds</div>
           <div class="side-feat"><i class="fas fa-warehouse"></i> Real-time inventory with low-stock alerts</div>

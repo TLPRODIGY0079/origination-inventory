@@ -28,7 +28,7 @@ function openBarcodeScanner() {
   openModal('Scan Barcode', `
     <div id="scannerContainer" style="position:relative;width:100%;max-width:400px;margin:0 auto">
       <div id="interactive" class="viewport" style="width:100%;height:280px;overflow:hidden;border-radius:var(--rs);background:#000"></div>
-      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:2px;background:rgba(0,122,255,.7);pointer-events:none"></div>
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:2px;background:rgba(212,175,55,.7);pointer-events:none"></div>
       <p style="text-align:center;color:var(--tx2);font-size:13px;margin-top:12px">Point camera at a product barcode</p>
     </div>`, `<button class="btn btn-outline btn-sm" onclick="stopBarcodeScanner();closeModal()">Cancel</button>`);
 

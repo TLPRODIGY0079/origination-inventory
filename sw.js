@@ -1,5 +1,5 @@
-const CACHE = 'marble-pos-v2';
-const ASSETS = ['/', '/index.html', '/login.html', '/supabase.js', '/manifest.json', '/marble-logo.png'];
+const CACHE = 'origination-inventory-v2';
+const ASSETS = ['/', '/index.html', '/login.html', '/supabase.js', '/manifest.json', '/assets/logos/origination-logo.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));

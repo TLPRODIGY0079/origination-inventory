@@ -8,8 +8,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true
     },
-    icon: 'marble-logo.png',
-    title: 'Marble POS'
+    icon: 'assets/logos/origination-logo.png',
+    title: 'Origination-Inventory'
   });
 
   win.loadURL('https://tlpinventories.vercel.app');
