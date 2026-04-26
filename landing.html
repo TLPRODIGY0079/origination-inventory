@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase.js"></script>
+<script src="supabase.js?v=5"></script>
 <script>
 (async()=>{
   const _sc=window.supabase.createClient('https://ydogahzvieaunitxaoim.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlkb2dhaHp2aWVhdW5pdHhhb2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMzQwOTksImV4cCI6MjA5MjgxMDA5OX0.l4ZlXqeASYruZ1dZ7ZZ3QRAxFlBl6vrzU_SYYH8-eiQ');
@@ -19,7 +19,7 @@
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{--primary-white:#FFFFFF;--accent-gold:#D4AF37;--primary-black:#000000;--ac:var(--accent-gold);--ac2:#B8941F;--gn:#34C759;--dn:#FF3B30;--wn:#FF9500;--tx:#1C1C1E;--tx2:#636366;--bg:#F2F2F7;--bg2:#fff;--bd:#D1D1D6}
 html{font-size:16px;scroll-behavior:smooth}
-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:var(--tx);background:var(--bg2)}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:var(--tx);background:linear-gradient(rgba(255,255,255,0.97),rgba(255,255,255,0.97)),url('assets/logos/origination-logo.png');background-size:auto,180px;background-position:center,center;background-repeat:no-repeat,repeat;background-attachment:fixed}
 a{color:var(--ac);text-decoration:none}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 28px;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit}
 .btn-primary{background:var(--ac);color:#fff}
@@ -39,7 +39,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(255,255,255,
 @media(max-width:768px){.nav-links{display:none}}
 
 /* HERO */
-.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:100px 5vw 60px;background:linear-gradient(160deg,#f0f7ff 0%,#fff 50%,#f0fff4 100%)}
+.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:100px 5vw 60px;background:linear-gradient(160deg,rgba(240,247,255,0.9) 0%,rgba(255,255,255,0.9) 50%,rgba(240,255,244,0.9) 100%),url('assets/logos/origination-logo.png');background-size:auto,250px;background-position:center,center;background-repeat:no-repeat,repeat}
 .hero-badge{display:inline-flex;align-items:center;gap:6px;background:#e8f4ff;color:var(--ac);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:24px}
 .hero h1{font-size:clamp(36px,6vw,72px);font-weight:800;line-height:1.1;margin-bottom:20px;max-width:800px;margin-left:auto;margin-right:auto}
 .hero h1 span{color:var(--ac)}
@@ -98,7 +98,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(255,255,255,
 .testi-role{font-size:11px;color:rgba(255,255,255,.4)}
 
 /* CTA */
-.cta-section{padding:80px 5vw;text-align:center;background:linear-gradient(135deg,#e8f4ff,#f0fff4)}
+.cta-section{padding:80px 5vw;text-align:center;background:linear-gradient(135deg,rgba(232,244,255,0.9),rgba(240,255,244,0.9)),url('assets/logos/origination-logo.png');background-size:auto,200px;background-position:center,center;background-repeat:no-repeat,repeat}
 .cta-section h2{font-size:clamp(28px,4vw,48px);font-weight:800;margin-bottom:16px}
 .cta-section p{font-size:16px;color:var(--tx2);margin-bottom:36px}
 

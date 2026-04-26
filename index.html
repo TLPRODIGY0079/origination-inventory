@@ -9,7 +9,7 @@
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script defer src="https://vercel.com/insights/script.js"></script>
-<script src="supabase.js"></script>
+<script src="supabase.js?v=5"></script>
 <script>
 (async()=>{
   const{data}=await window.supabaseClient.auth.getSession();
@@ -44,14 +44,15 @@
   --gn2:rgba(52,199,89,.18);--wn2:rgba(255,149,0,.18);--dn2:rgba(255,59,48,.18);
 }
 html{font-size:16px}
-body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--tx);overflow:hidden;height:100vh;width:100vw}
+body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:linear-gradient(rgba(242,242,247,0.95),rgba(242,242,247,0.95)),url('assets/logos/origination-logo.png');background-size:auto,150px;background-position:center,center;background-repeat:no-repeat,repeat;background-attachment:fixed;color:var(--tx);overflow:hidden;height:100vh;width:100vw}
+body.dark{background:linear-gradient(rgba(0,0,0,0.95),rgba(0,0,0,0.95)),url('assets/logos/origination-logo.png');background-size:auto,150px;background-position:center,center;background-repeat:no-repeat,repeat;background-attachment:fixed}
 input,select,textarea,button{font-family:inherit;font-size:16px}
 a{color:var(--ac);text-decoration:none}
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
 
-#loginScreen{position:fixed;inset:0;background:url('assets/logos/origination-logo.png') center/cover no-repeat,linear-gradient(135deg,#1a1a1a 0%,#2d2d2d 100%);display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity .5s,transform .5s}
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,rgba(26,26,26,0.95) 0%,rgba(45,45,45,0.95) 100%),url('assets/logos/origination-logo.png');background-size:auto,300px;background-position:center,center;background-repeat:no-repeat,repeat;display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity .5s,transform .5s}
 #loginScreen.hidden{opacity:0;pointer-events:none;transform:scale(1.05)}
 .login-card{background:var(--bg2);border-radius:24px;padding:48px 40px;width:380px;max-width:90vw;box-shadow:var(--sh2);text-align:center}
 .login-logo{width:64px;height:64px;background:var(--ac);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px;color:#fff}

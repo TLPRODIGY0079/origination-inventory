@@ -1,4 +1,4 @@
-const CACHE = 'origination-inventory-v3';
+const CACHE = 'origination-inventory-v5';
 const ASSETS = ['/', '/index.html', '/login.html', '/supabase.js', '/manifest.json', '/assets/logos/origination-logo.png'];
 
 self.addEventListener('install', e => {
