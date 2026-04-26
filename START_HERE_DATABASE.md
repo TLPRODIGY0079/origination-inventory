@@ -15,14 +15,24 @@ https://app.supabase.com/project/ydogahzvieaunitxaoim/sql/new
 
 ### Step 2: Copy & Paste
 1. Open the file: `QUICK_SETUP.sql` (in your project root)
-2. Copy the ENTIRE file
+2. Copy the ENTIRE file (it's been updated with the correct schema)
 3. Paste it into the Supabase SQL Editor
 4. Click "Run" (or press Ctrl+Enter)
 
 ### Step 3: Refresh Your App
 1. Go back to your app
 2. Press `Ctrl + Shift + R` to hard refresh
-3. You should now see the dashboard!
+3. You should now see the dashboard with no errors!
+
+## Already Ran QUICK_SETUP.sql Before?
+
+If you already ran the old version, you need to add missing columns:
+1. Open the file: `supabase/migrations/003_add_missing_columns.sql`
+2. Copy and paste it into Supabase SQL Editor
+3. Click "Run"
+4. Refresh your app
+
+See `FIX_400_ERRORS.md` for details.
 
 ## That's It!
 

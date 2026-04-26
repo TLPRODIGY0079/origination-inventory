@@ -73,11 +73,16 @@ CREATE TABLE IF NOT EXISTS sales (
   id TEXT PRIMARY KEY,
   receipt_no TEXT NOT NULL,
   date TIMESTAMPTZ DEFAULT now(),
+  date_str TEXT,
   total NUMERIC(10,2) NOT NULL,
+  total_amount NUMERIC(10,2),
   payment_method TEXT DEFAULT 'cash' CHECK (payment_method IN ('cash', 'card', 'mobile')),
   cashier_id UUID REFERENCES auth.users(id),
+  cashier_name TEXT,
   customer_name TEXT,
   customer_phone TEXT,
+  items INTEGER DEFAULT 0,
+  discount NUMERIC(10,2) DEFAULT 0,
   business_id UUID,
   created_at TIMESTAMPTZ DEFAULT now()
 );
