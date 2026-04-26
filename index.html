@@ -12,8 +12,7 @@
 <script src="supabase.js"></script>
 <script>
 (async()=>{
-  const _sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
-  const{data}=await _sc.auth.getSession();
+  const{data}=await window.supabaseClient.auth.getSession();
   if(!data?.session) window.location.replace('login.html');
 })();
 </script>
@@ -355,8 +354,8 @@ applyTheme(getSavedTheme());
 window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(getSavedTheme()==='auto')applyTheme('auto')});
 
 const SUPABASE_URL = 'https://dzpdcfmlavcnhwmjjmbf.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6cGRjZm1sYXZjbmh3bWpqbWJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU2OTQ1NzcsImV4cCI6MjA2MTI3MDU3N30.sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk';
+const supabaseClient = window.supabaseClient;
 let IS_ONLINE_MODE = true;
 
 // ── IndexedDB offline queue ──────────────────────────────────────────────────

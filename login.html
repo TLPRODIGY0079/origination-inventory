@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sign In — Origination-Inventory</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase.js"></script>
 <script>
 (async()=>{
-  const _sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
-  const{data}=await _sc.auth.getSession();
+  const{data}=await window.supabaseClient.auth.getSession();
   if(data?.session) window.location.replace('index.html');
 })();
 </script>
@@ -112,7 +112,7 @@ nav{height:64px;padding:0 5vw;display:flex;align-items:center;justify-content:sp
 </div>
 
 <script>
-const sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
+const sc=window.supabaseClient;
 
 function showError(msg){const b=document.getElementById('errorBox');b.textContent=msg;b.style.display='block'}
 function clearError(){document.getElementById('errorBox').style.display='none'}

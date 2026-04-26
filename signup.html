@@ -8,10 +8,8 @@
 <script defer src="https://vercel.com/insights/script.js"></script>
 <script src="supabase.js"></script>
 <script>
-  
 (async()=>{
-  const _sc=window.supabase.createClient('https://dzpdcfmlavcnhwmjjmbf.supabase.co','sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk');
-  const{data}=await _sc.auth.getSession();
+  const{data}=await window.supabaseClient.auth.getSession();
   if(data?.session) window.location.replace('index.html');
 })();
 </script>
@@ -198,9 +196,7 @@ nav{height:64px;padding:0 5vw;display:flex;align-items:center;justify-content:sp
 </div>
 
 <script>
-const SUPABASE_URL='https://dzpdcfmlavcnhwmjjmbf.supabase.co';
-const SUPABASE_ANON_KEY='sb_publishable_sDkdIiUQY0S2kNVoVwbUMg_f_zTObmk';
-const sc=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const sc=window.supabaseClient;
 
 let selectedPlan='free';
 
