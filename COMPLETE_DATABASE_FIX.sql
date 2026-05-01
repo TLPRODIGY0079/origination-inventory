@@ -54,6 +54,9 @@ ADD COLUMN IF NOT EXISTS business_id UUID;
 ALTER TABLE variants 
 ADD COLUMN IF NOT EXISTS cost DECIMAL(10,2) DEFAULT 0;
 
+ALTER TABLE variants 
+ADD COLUMN IF NOT EXISTS attrs JSONB DEFAULT '{}'::jsonb;
+
 -- ============================================================================
 -- STEP 5: Fix RLS Policies for brands
 -- ============================================================================
