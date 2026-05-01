@@ -17,3 +17,5 @@ Thumbs.db
 
 # Kiro internal
 .kiro/
+.vercel
+.env*.local
