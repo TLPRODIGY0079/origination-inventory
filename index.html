@@ -262,6 +262,31 @@ tr:hover td{background:var(--bg)}
 .wave-accent{color:var(--accent-gold)}
 .wave-bg{background-color:var(--accent-gold)}
 .wave-border{border-color:var(--accent-gold)}
+
+/* Print styles for receipt */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .modal, .modal * {
+    visibility: visible;
+  }
+  .modal {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white;
+  }
+  .modal-header, .modal-footer {
+    display: none;
+  }
+  .receipt {
+    width: 80mm;
+    margin: 0 auto;
+    font-size: 12px;
+  }
+}
 </style>
 </head>
 <body>
@@ -1121,6 +1146,7 @@ async function completeSale(subtotal){
     cashier_name:currentUser.name,
     customer_name:($('coCustomer')?$('coCustomer').value:'Walk-in Customer').trim()||'Walk-in Customer',
     items:cart.reduce((s,i)=>s+i.qty,0),
+    total:total,
     total_amount:total,
     discount,
     payment_method:$('coPayment')?$('coPayment').value:'cash',
@@ -1182,7 +1208,7 @@ async function completeSale(subtotal){
 }
 function showReceipt(sale){
   const items=DB.saleItems.filter(si=>si.saleId===sale.id);
-  openModal('Receipt — '+sale.receiptNo,`<div class="receipt"><div class="receipt-center"><strong style="font-size:16px">ORIGINATION STORES</strong><br>${new Date(sale.date).toLocaleString()}</div><hr><div class="receipt-row"><span>Receipt:</span><span>${sale.receiptNo}</span></div><div class="receipt-row"><span>Cashier:</span><span>${sale.cashierName}</span></div><div class="receipt-row"><span>Customer:</span><span>${sale.customerName}</span></div><hr>${items.map(i=>`<div style="margin-bottom:6px"><div style="font-weight:700">${i.productName}</div><div style="font-size:11px;color:#666">${i.variantDesc}${i.serialNum?' | S/N: '+i.serialNum:''}</div><div class="receipt-row"><span>${i.qty} × ${money(i.price)}</span><span>${money(i.qty*i.price)}</span></div></div>`).join('')}<hr><div class="receipt-row"><span>Subtotal:</span><span>${money(sale.totalAmount+sale.discount)}</span></div>${sale.discount>0?`<div class="receipt-row"><span>Discount:</span><span>-${money(sale.discount)}</span></div>`:''}<div class="receipt-row" style="font-weight:700;font-size:14px"><span>TOTAL:</span><span>${money(sale.totalAmount)}</span></div><div class="receipt-row"><span>Payment:</span><span style="text-transform:capitalize">${sale.paymentMethod}</span></div><hr><div class="receipt-center" style="font-size:11px">Thank you for shopping with us!</div></div>`,`<button class="btn btn-outline btn-sm" onclick="closeModal();if(currentPage==='sales')renderSales()">Close</button>`);
+  openModal('Receipt — '+sale.receiptNo,`<div class="receipt"><div class="receipt-center"><strong style="font-size:16px">ORIGINATION STORES</strong><br>${new Date(sale.date).toLocaleString()}</div><hr><div class="receipt-row"><span>Receipt:</span><span>${sale.receiptNo}</span></div><div class="receipt-row"><span>Cashier:</span><span>${sale.cashierName}</span></div><div class="receipt-row"><span>Customer:</span><span>${sale.customerName}</span></div><hr>${items.map(i=>`<div style="margin-bottom:6px"><div style="font-weight:700">${i.productName}</div><div style="font-size:11px;color:#666">${i.variantDesc}${i.serialNum?' | S/N: '+i.serialNum:''}</div><div class="receipt-row"><span>${i.qty} × ${money(i.price)}</span><span>${money(i.qty*i.price)}</span></div></div>`).join('')}<hr><div class="receipt-row"><span>Subtotal:</span><span>${money(sale.totalAmount+sale.discount)}</span></div>${sale.discount>0?`<div class="receipt-row"><span>Discount:</span><span>-${money(sale.discount)}</span></div>`:''}<div class="receipt-row" style="font-weight:700;font-size:14px"><span>TOTAL:</span><span>${money(sale.totalAmount)}</span></div><div class="receipt-row"><span>Payment:</span><span style="text-transform:capitalize">${sale.paymentMethod}</span></div><hr><div class="receipt-center" style="font-size:11px">Thank you for shopping with us!</div></div>`,`<button class="btn btn-primary btn-sm" onclick="window.print()">Print</button><button class="btn btn-outline btn-sm" onclick="closeModal();if(currentPage==='sales')renderSales()">Close</button>`);
 }
 
 // ── Export Service ───────────────────────────────────────────────────────────
