@@ -644,7 +644,7 @@ async function signInWithRealAuth(email,password){
   const user=userData.user;
   const{data:profile,error:profileError}=await supabaseClient.from('profiles').select('*').eq('id',user.id).single();
   if(profileError||!profile){console.error(profileError);return{ok:false,error:profileError||new Error('Profile not found')}}
-  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,plan:profile.plan||'free',onboarding_completed:profile.onboarding_completed??true,active:true,business_id:profile.business_id||null};
+  currentUser={id:user.id,username:user.email,name:profile.full_name||user.email.split('@')[0]||'User',role:profile.role||'cashier',plan:profile.plan||'free',onboarding_completed:profile.onboarding_completed??true,active:true,business_id:profile.business_id||null};
   return{ok:true,user:currentUser};
 }
 
@@ -656,7 +656,7 @@ async function restoreSession(){
   const user=userData.user;
   const{data:profile,error:profileError}=await supabaseClient.from('profiles').select('*').eq('id',user.id).single();
   if(profileError||!profile)return false;
-  currentUser={id:user.id,username:user.email,name:profile.full_name,role:profile.role,plan:profile.plan||'free',onboarding_completed:profile.onboarding_completed??true,active:true,business_id:profile.business_id||null};
+  currentUser={id:user.id,username:user.email,name:profile.full_name||user.email.split('@')[0]||'User',role:profile.role||'cashier',plan:profile.plan||'free',onboarding_completed:profile.onboarding_completed??true,active:true,business_id:profile.business_id||null};
   $('loginScreen').classList.add('hidden');
   $('appShell').classList.add('active');
   renderSidebar();
@@ -763,10 +763,11 @@ function renderSidebar(){
   });
   $('sidebarNav').innerHTML=html;
   $('sidebarNav').querySelectorAll('.nav-item').forEach(el=>el.addEventListener('click',()=>{navigate(el.dataset.page);closeSidebar()}));
-  const initials=currentUser.name.split(' ').map(w=>w[0]).join('').toUpperCase();
+  const userName = currentUser.name || currentUser.username || 'User';
+  const initials=userName.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
   const planColors={free:'badge-gray',pro:'badge-blue',enterprise:'badge-orange'};
   const planBadge=`<span class="badge ${planColors[currentUser.plan||'free']}" style="font-size:10px;padding:2px 7px">${(currentUser.plan||'free').toUpperCase()}</span>`;
-  $('sidebarUser').innerHTML=`<div class="user-avatar">${initials}</div><div class="user-info"><div class="name">${currentUser.name} ${planBadge}</div><div class="role">${currentUser.role}</div></div><button class="logout-btn" id="logoutBtn"><i class="fas fa-right-from-bracket"></i></button>`;
+  $('sidebarUser').innerHTML=`<div class="user-avatar">${initials}</div><div class="user-info"><div class="name">${userName} ${planBadge}</div><div class="role">${currentUser.role}</div></div><button class="logout-btn" id="logoutBtn"><i class="fas fa-right-from-bracket"></i></button>`;
   $('logoutBtn').addEventListener('click',logout);
 }
 function closeSidebar(){$('sidebar').classList.remove('open');$('sidebarBackdrop').classList.remove('active')}
