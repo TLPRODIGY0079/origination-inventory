@@ -1,5 +1,15 @@
 # 🚀 START HERE - Fix Admin Issues
 
+## 🚨 GETTING THE FOREIGN KEY ERROR?
+
+**If you see**: `ERROR: 23503: insert or update on table "profiles" violates foreign key constraint`
+
+**READ THIS FIRST**: `FIX_THIS_ERROR_NOW.md` ← This explains exactly what to do!
+
+**Also read**: `WHY_YOU_GET_THIS_ERROR.md` ← Visual explanation of why this happens
+
+---
+
 ## Quick Summary
 
 You're trying to add new admins (Victor Mulenga and kaelachanda2004@gmail.com) but getting errors. The issue is that you need to create users in Supabase Auth Dashboard **first**, then create their profiles.
