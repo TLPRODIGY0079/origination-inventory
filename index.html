@@ -479,7 +479,8 @@ async function loadDB() {
     saleItemsRes,
     suppliersRes,
     stockMovesRes,
-    customersRes
+    customersRes,
+    profilesRes
   ] = await Promise.all([
     supabaseClient.from('categories').select('*'),
     supabaseClient.from('brands').select('*'),
@@ -490,12 +491,13 @@ async function loadDB() {
     supabaseClient.from('sale_items').select('*'),
     supabaseClient.from('suppliers').select('*'),
     supabaseClient.from('stock_moves').select('*').order('date', { ascending: true }),
-    supabaseClient.from('customers').select('*')
+    supabaseClient.from('customers').select('*'),
+    supabaseClient.from('profiles').select('id, full_name, role, plan, business_id, created_at').order('created_at', { ascending: true })
   ]);
 
   const results = [
     categoriesRes, brandsRes, productsRes, variantsRes, serializedRes,
-    salesRes, saleItemsRes, suppliersRes, stockMovesRes, customersRes
+    salesRes, saleItemsRes, suppliersRes, stockMovesRes, customersRes, profilesRes
   ];
 
   const failed = results.find(r => r.error);
@@ -505,12 +507,13 @@ async function loadDB() {
   }
 
   return {
-    users: [
-      {id:'u-admin',username:'admin',password:'admin123',name:'Admin User',role:'admin',active:true},
-      {id:'u-cashier',username:'cashier',password:'cash123',name:'Sarah Johnson',role:'cashier',active:true},
-      {id:'u-manager',username:'manager',password:'mgr123',name:'David Kim',role:'manager',active:true},
-      {id:'u-store',username:'store',password:'store123',name:'Mike Chen',role:'storekeeper',active:true}
-    ],
+    users: (profilesRes.data || []).map(p => ({
+      id: p.id,
+      name: p.full_name || 'User',
+      username: p.full_name || 'User',
+      role: p.role || 'cashier',
+      active: true
+    })),
     categories: categoriesRes.data || [],
     brands: brandsRes.data || [],
     products: (productsRes.data || []).map(p => ({
