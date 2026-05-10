@@ -12,7 +12,7 @@
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script defer src="https://vercel.com/insights/script.js"></script>
-<script src="supabase.js?v=7"></script>
+<script src="supabase.js?v=8"></script>
 <script>
 (async()=>{
   const{data}=await window.supabaseClient.auth.getSession();
@@ -382,7 +382,7 @@ async function syncOfflineQueue(){
           await supabaseClient.from('sale_items').insert([item]);
           if(item.serialized&&item.serial_id)await supabaseClient.from('serialized_items').update({status:'sold'}).eq('id',item.serial_id);
           else{const v=getVariant(item.variant_id);if(v)await supabaseClient.from('variants').update({qty:Math.max(0,(Number(v.qty)||0)-item.qty)}).eq('id',item.variant_id)}
-          await supabaseClient.from('stock_moves').insert([{id:uid(),type:'sale',variant_id:item.variant_id,qty:item.qty,ref:entry.sale.id,date:entry.sale.date,user_id:entry.sale.cashier_id,notes:'Sale '+entry.sale.receipt_no}]);
+          await supabaseClient.from('stock_moves').insert([{id:uid(),type:'sale',variant_id:item.variant_id,qty:item.qty,ref:entry.sale.id,date:entry.sale.date,user_id:entry.sale.cashier_id||currentUser.id,notes:'Sale '+entry.sale.receipt_no}]);
         }
       }
       await IDB.remove(entry.id);synced++;
@@ -703,12 +703,12 @@ function openProductModal(editId){
         const vData={id:vId,product_id:newPId,name:name,sku:name.replace(/\s+/g,'').substring(0,4).toUpperCase()+'-'+uid().slice(0,5).toUpperCase(),attrs:{},price:data.price,cost:data.cost,qty:data.type==='qty'?initStock:0,business_id:currentUser.business_id};
         const{error:vE}=await supabaseClient.from('variants').insert([vData]);
         if(vE){toast('Failed to create variant','error');return}
-        if(initStock>0&&data.type==='qty')await supabaseClient.from('stock_moves').insert([{id:uid(),type:'stock_in',variant_id:vId,qty:initStock,date:now(),user_id:currentUser.id,notes:`Initial stock: +${initStock}`}]);
+        if(initStock>0&&data.type==='qty')await supabaseClient.from('stock_moves').insert([{id:uid(),type:'restock',variant_id:vId,qty:initStock,date:now(),user_id:currentUser.id,notes:`Initial stock: +${initStock}`}]);
         // Add pending serials
         if(data.type==='serialized'&&window._pendingSerials.length>0){
           for(const serial of window._pendingSerials){
             const{error:sE}=await supabaseClient.from('serialized_items').insert([{id:uid(),variant_id:vId,serial,status:'in_stock',date_added:now()}]);
-            if(!sE)await supabaseClient.from('stock_moves').insert([{id:uid(),type:'stock_in',variant_id:vId,qty:1,date:now(),user_id:currentUser.id,notes:`Serial: ${serial}`}]);
+            if(!sE)await supabaseClient.from('stock_moves').insert([{id:uid(),type:'restock',variant_id:vId,qty:1,date:now(),user_id:currentUser.id,notes:`Serial: ${serial}`}]);
           }
         }
       }
@@ -859,7 +859,7 @@ async function processAddStock(){
       for(const serial of window._stockSerials){
         const{error}=await supabaseClient.from('serialized_items').insert([{id:uid(),variant_id:vId,serial,status:'in_stock',date_added:now()}]);
         if(error)console.error('Serial insert error:',error);
-        else{await supabaseClient.from('stock_moves').insert([{id:uid(),type:'stock_in',variant_id:vId,qty:1,date:now(),user_id:currentUser.id,notes:'Serial added: '+serial}]);added++}
+        else{await supabaseClient.from('stock_moves').insert([{id:uid(),type:'restock',variant_id:vId,qty:1,date:now(),user_id:currentUser.id,notes:'Serial added: '+serial}]);added++}
       }
       window._stockSerials=[];DB=await loadDB();closeModal();
       toast(`${added} serial(s) added to stock`,'success');
@@ -869,7 +869,7 @@ async function processAddStock(){
       if(qty<=0){toast('Enter valid quantity','error');if(btn){btn.disabled=false;btn.innerHTML='<i class="fas fa-check"></i> Add Stock'}return}
       const{error}=await supabaseClient.from('variants').update({qty:(Number(v.qty)||0)+qty}).eq('id',vId);
       if(error)throw error;
-      await supabaseClient.from('stock_moves').insert([{id:uid(),type:'stock_in',variant_id:vId,qty,date:now(),user_id:currentUser.id,notes:`Qty stock in: +${qty}`}]);
+      await supabaseClient.from('stock_moves').insert([{id:uid(),type:'restock',variant_id:vId,qty,date:now(),user_id:currentUser.id,notes:`Qty stock in: +${qty}`}]);
       DB=await loadDB();closeModal();
       toast(`${qty} ${unitLabel(p)} added to stock`,'success');
       if(currentPage==='products')renderProducts();
