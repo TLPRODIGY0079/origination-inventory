@@ -903,9 +903,16 @@ function openTradeinModal(){
       try{
         const{error}=await supabaseClient.from('trade_ins').insert([{id:tradeInId,receipt_no:receiptNo,date:dateNow,date_str:today(),trade_in_device_name:oldDevice,trade_in_imei:oldIMEI||null,trade_in_value:tradeValue,new_variant_id:newVariantId,new_device_name:newDeviceName,new_device_sku:newDeviceSku,new_device_price:newPrice,new_device_imei:newDeviceImei||null,net_payment:netPayment,customer_name:customer,cashier_id:currentUser.id,cashier_name:currentUser.name,business_id:currentUser.business_id||null}]);
         if(error)throw error;
+        const saleId=uid();
+        const sale={id:saleId,receipt_no:receiptNo,cashier_id:currentUser.id,cashier_name:currentUser.name,customer_name:customer,items:1,total:netPayment,total_amount:netPayment,discount:0,payment_method:'cash',date:dateNow,date_str:today(),business_id:currentUser.business_id||null};
+        const{error:saleError}=await supabaseClient.from('sales').insert([sale]);
+        if(saleError)throw saleError;
+        const saleItem={id:uid(),sale_id:saleId,variant_id:newVariantId,product_name:newDeviceName,variant_desc:`SKU: ${newDeviceSku}`,serialized:false,serial_id:null,serial_num:null,qty:1,price:newPrice,discount:0,subtotal:newPrice};
+        const{error:itemError}=await supabaseClient.from('sale_items').insert([saleItem]);
+        if(itemError)throw itemError;
         const{data:currentVariant}=await supabaseClient.from('variants').select('qty').eq('id',newVariantId).single();
         if(currentVariant){const newQty=Math.max(0,(Number(currentVariant.qty)||0)-1);await supabaseClient.from('variants').update({qty:newQty}).eq('id',newVariantId)}
-        await supabaseClient.from('stock_moves').insert([{id:uid(),type:'sale',variant_id:newVariantId,qty:1,ref:tradeInId,date:dateNow,user_id:currentUser.id,notes:`Trade-in: ${receiptNo}`}]);
+        await supabaseClient.from('stock_moves').insert([{id:uid(),type:'sale',variant_id:newVariantId,qty:1,ref:saleId,date:dateNow,user_id:currentUser.id,notes:`Trade-in: ${receiptNo}`}]);
         DB=await loadDB();toast('Trade-in processed successfully ✓','success');closeModal();renderTradein();
       }catch(err){console.error(err);toast('Failed to process trade-in','error')}
     });
